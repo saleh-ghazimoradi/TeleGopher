@@ -1,9 +1,13 @@
 package route
 
-import "net/http"
+import (
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/middleware"
+	"net/http"
+)
 
 type RegisterRoutes struct {
 	healthRoute *HealthCheckRoute
+	middleware  *middleware.Middleware
 }
 
 type Options func(*RegisterRoutes)
@@ -14,12 +18,16 @@ func WithHealthCheckRoute(route *HealthCheckRoute) Options {
 	}
 }
 
+func WithMiddleware(middleware *middleware.Middleware) Options {
+	return func(r *RegisterRoutes) {
+		r.middleware = middleware
+	}
+}
+
 func (r *RegisterRoutes) Register() http.Handler {
 	mux := http.NewServeMux()
-
 	r.healthRoute.Healthcheck(mux)
-
-	return mux
+	return r.middleware.RecoverPanic(r.middleware.LoggingMiddleware(r.middleware.CORSMiddleware(mux)))
 }
 
 func NewRegisterRoutes(opts ...Options) *RegisterRoutes {

@@ -5,6 +5,7 @@ import (
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
 	"github.com/saleh-ghazimoradi/TeleGopher/infra/postgresql"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/handler"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/middleware"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/route"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/server"
 	"log/slog"
@@ -58,10 +59,13 @@ var runCmd = &cobra.Command{
 			}
 		}()
 
+		middlewares := middleware.NewMiddleware(logger)
+
 		healthcheckHandler := handler.NewHealthCheckHandler(cfg)
 		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
 		registerRoutes := route.NewRegisterRoutes(
 			route.WithHealthCheckRoute(healthcheckRoute),
+			route.WithMiddleware(middlewares),
 		)
 
 		s := server.NewServer(
