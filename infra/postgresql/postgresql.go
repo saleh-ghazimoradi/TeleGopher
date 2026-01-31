@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	_ "github.com/lib/pq"
 	"time"
 )
 
@@ -97,13 +98,14 @@ func WithMaxLifetime(maxLifetime time.Duration) Options {
 }
 
 func (p *Postgresql) uri() string {
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s", p.Host, p.Port, p.User, p.Password, p.Name, p.SSLMode)
+	return fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s timezone=%s connect_timeout=%d", p.Host, p.Port, p.User, p.Password, p.Name, p.SSLMode, p.TimeZone, p.ConnectTimeout)
 }
 
 func (p *Postgresql) Connect() (*sql.DB, error) {
 	db, err := sql.Open("postgres", p.uri())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	db.SetMaxOpenConns(p.MaxOpenConn)
