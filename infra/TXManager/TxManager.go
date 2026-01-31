@@ -17,9 +17,7 @@ type txManager struct {
 type TransactionFunc func(*sql.Tx) error
 
 func (tm *txManager) WithTransaction(ctx context.Context, fn TransactionFunc) error {
-	tx, err := tm.db.BeginTx(ctx, &sql.TxOptions{
-		Isolation: sql.LevelSerializable,
-	})
+	tx, err := tm.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
