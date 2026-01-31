@@ -13,8 +13,9 @@ var (
 )
 
 type Config struct {
-	Server     Server
-	Postgresql Postgresql
+	Server      Server
+	Postgresql  Postgresql
+	Application Application
 }
 
 type Server struct {
@@ -38,6 +39,11 @@ type Postgresql struct {
 	MaxLifetime       time.Duration `env:"POSTGRES_MAX_LIFETIME"`
 	SSLMode           string        `env:"POSTGRES_SSL_MODE"`
 	ConnectionTimeout time.Duration `env:"POSTGRES_CONNECTION_TIMEOUT"`
+}
+
+type Application struct {
+	Version     string `env:"VERSION"`
+	Environment string `env:"ENVIRONMENT"`
 }
 
 func GetConfigInstance() (*Config, error) {

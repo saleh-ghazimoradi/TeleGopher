@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
 	"github.com/saleh-ghazimoradi/TeleGopher/infra/postgresql"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/handler"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/route"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/server"
 	"log/slog"
 	"os"
@@ -43,21 +45,29 @@ var runCmd = &cobra.Command{
 
 		db, err := dbConfig.Connect()
 		if err != nil {
-			logger.Error("error connecting to database", "err", err.Error())
+			logger.Error("error connecting", "err", err.Error())
 			os.Exit(1)
 		}
 
+		_ = db
+
 		defer func() {
 			if err := db.Close(); err != nil {
-				logger.Error("error closing database connection", "err", err.Error())
+				logger.Error("error closing db", "err", err.Error())
 				os.Exit(1)
 			}
 		}()
 
+		healthcheckHandler := handler.NewHealthCheckHandler(cfg)
+		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
+		registerRoutes := route.NewRegisterRoutes(
+			route.WithHealthCheckRoute(healthcheckRoute),
+		)
+
 		s := server.NewServer(
 			server.WithHost(cfg.Server.Host),
 			server.WithPort(cfg.Server.Port),
-			server.WithHandler(nil),
+			server.WithHandler(registerRoutes.Register()),
 			server.WithReadTimeout(cfg.Server.ReadTimeout),
 			server.WithWriteTimeout(cfg.Server.WriteTimeout),
 			server.WithIdleTimeout(cfg.Server.IdleTimeout),
