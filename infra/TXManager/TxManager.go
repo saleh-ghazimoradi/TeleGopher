@@ -1,4 +1,4 @@
-package TXManager
+package infra
 
 import (
 	"context"
@@ -7,40 +7,42 @@ import (
 )
 
 type TxManager interface {
-	WithTransaction(ctx context.Context, fn TransactionFunc) error
+	WithTransaction(ctx context.Context, fn func(tx *sql.Tx) error) error
+	WithTransactionOpts(ctx context.Context, opts *sql.TxOptions, fn func(tx *sql.Tx) error) error
 }
 
 type txManager struct {
 	db *sql.DB
 }
 
-type TransactionFunc func(*sql.Tx) error
+func (m *txManager) WithTransaction(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	return m.WithTransactionOpts(ctx, nil, fn)
+}
 
-func (tm *txManager) WithTransaction(ctx context.Context, fn TransactionFunc) error {
-	tx, err := tm.db.BeginTx(ctx, nil)
+func (m *txManager) WithTransactionOpts(ctx context.Context, opts *sql.TxOptions, fn func(tx *sql.Tx) error) error {
+	tx, err := m.db.BeginTx(ctx, opts)
 	if err != nil {
-		return fmt.Errorf("beginning transaction: %w", err)
+		return fmt.Errorf("begin tx: %w", err)
 	}
 
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
-			panic(p)
+			_ = tx.Rollback()
+			panic(p) // re-panic after rollback
+		}
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				err = fmt.Errorf("rollback failed: %v (original: %w)", rbErr, err)
+			}
+			return
+		}
+		if cmErr := tx.Commit(); cmErr != nil {
+			err = fmt.Errorf("commit failed: %w", cmErr)
 		}
 	}()
 
-	if err := fn(tx); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("rolling back transaction: %v (original error: %w)", rbErr, err)
-		}
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("committing transaction: %w", err)
-	}
-
-	return nil
+	err = fn(tx)
+	return err
 }
 
 func NewTxManager(db *sql.DB) TxManager {
