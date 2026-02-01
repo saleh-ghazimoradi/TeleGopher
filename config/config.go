@@ -16,6 +16,7 @@ type Config struct {
 	Server      Server
 	Postgresql  Postgresql
 	Application Application
+	JWT         JWT
 }
 
 type Server struct {
@@ -44,6 +45,11 @@ type Postgresql struct {
 type Application struct {
 	Version     string `env:"VERSION"`
 	Environment string `env:"ENVIRONMENT"`
+}
+
+type JWT struct {
+	Secret string        `env:"JWT_SECRET"`
+	Expire time.Duration `env:"JWT_EXPIRE"`
 }
 
 func GetConfigInstance() (*Config, error) {
