@@ -2,30 +2,32 @@ package handler
 
 import (
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
-	"github.com/saleh-ghazimoradi/TeleGopher/internal/dto"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/helper"
 	"net/http"
 )
 
 type HealthCheckHandler struct {
-	cfg *config.Config
+	cfg         *config.Config
+	errResponse *helper.ErrResponse
 }
 
 func (h *HealthCheckHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	payload := &dto.Health{
-		SystemInfo: map[string]any{
-			"version":     h.cfg.Application.Version,
+	env := helper.Envelope{
+		"status": "available",
+		"system_info": map[string]string{
 			"environment": h.cfg.Application.Environment,
+			"version":     h.cfg.Application.Version,
 		},
 	}
 
-	if err := helper.SuccessResponse(w, "I'm breathing", payload, nil); err != nil {
-		return
+	if err := helper.WriteJSON(w, http.StatusOK, env, nil); err != nil {
+		h.errResponse.ServerErrorResponse(w, r, err)
 	}
 }
 
-func NewHealthCheckHandler(cfg *config.Config) *HealthCheckHandler {
+func NewHealthCheckHandler(cfg *config.Config, errResponse *helper.ErrResponse) *HealthCheckHandler {
 	return &HealthCheckHandler{
-		cfg: cfg,
+		cfg:         cfg,
+		errResponse: errResponse,
 	}
 }
