@@ -8,7 +8,8 @@ import (
 )
 
 type Middleware struct {
-	logger *slog.Logger
+	logger      *slog.Logger
+	errResponse *helper.ErrResponse
 }
 
 func (m *Middleware) LoggingMiddleware(next http.Handler) http.Handler {
@@ -37,16 +38,15 @@ func (m *Middleware) RecoverPanic(next http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				w.Header().Set("Connection", "close")
-				if err := helper.InternalServerResponse(w, "panic recovery hit", fmt.Errorf("%v", err)); err != nil {
-					return
-				}
+				m.errResponse.ServerErrorResponse(w, r, fmt.Errorf("%v", err))
 			}
 		}()
 		next.ServeHTTP(w, r)
 	})
 }
-func NewMiddleware(logger *slog.Logger) *Middleware {
+func NewMiddleware(logger *slog.Logger, errResponse *helper.ErrResponse) *Middleware {
 	return &Middleware{
-		logger: logger,
+		logger:      logger,
+		errResponse: errResponse,
 	}
 }
