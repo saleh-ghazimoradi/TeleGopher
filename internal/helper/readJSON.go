@@ -20,6 +20,7 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, payload any) error {
 		var syntaxError *json.SyntaxError
 		var unmarshalTypeError *json.UnmarshalTypeError
 		var invalidUnmarshalError *json.InvalidUnmarshalError
+		// Add a new maxBytesError variable.
 		var maxBytesError *http.MaxBytesError
 
 		switch {

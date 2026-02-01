@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func writeJSON(w http.ResponseWriter, status int, data any, headers http.Header) error {
+func WriteJSON(w http.ResponseWriter, status int, data Envelope, headers http.Header) error {
 	js, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
