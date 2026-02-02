@@ -3,11 +3,15 @@ package cmd
 import (
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
+	infra "github.com/saleh-ghazimoradi/TeleGopher/infra/TXManager"
 	"github.com/saleh-ghazimoradi/TeleGopher/infra/postgresql"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/handler"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/middleware"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/route"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/helper"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/server"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
 	"log/slog"
 	"os"
 
@@ -59,12 +63,21 @@ var runCmd = &cobra.Command{
 			}
 		}()
 
-		middlewares := middleware.NewMiddleware(logger)
+		txManager := infra.NewTxManager(db)
+		errResponse := helper.NewErrResponse(logger)
+		middlewares := middleware.NewMiddleware(cfg, logger, errResponse)
+		validator := helper.NewValidator()
 
-		healthcheckHandler := handler.NewHealthCheckHandler(cfg)
+		userRepository := repository.NewUserRepository(db, db)
+		authService := service.NewAuthenticationService(cfg, userRepository, txManager)
+		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
+
+		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
 		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
+		authRoute := route.NewAuthenticationRoute(authHandler, middlewares)
 		registerRoutes := route.NewRegisterRoutes(
 			route.WithHealthCheckRoute(healthcheckRoute),
+			route.WithAuthenticationRoute(authRoute),
 			route.WithMiddleware(middlewares),
 		)
 
