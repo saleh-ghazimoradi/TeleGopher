@@ -2,12 +2,17 @@ package middleware
 
 import (
 	"fmt"
+	"github.com/saleh-ghazimoradi/TeleGopher/config"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/helper"
+	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 type Middleware struct {
+	cfg         *config.Config
 	logger      *slog.Logger
 	errResponse *helper.ErrResponse
 }
@@ -44,8 +49,50 @@ func (m *Middleware) RecoverPanic(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-func NewMiddleware(logger *slog.Logger, errResponse *helper.ErrResponse) *Middleware {
+
+func (m *Middleware) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			m.errResponse.InvalidCredentialsResponse(w, r)
+			return
+		}
+
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			m.errResponse.InvalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		platform := r.Header.Get("X-Platform")
+		if platform != string(domain.PlatformWeb) && platform != string(domain.PlatformMobile) {
+			m.errResponse.InvalidCredentialsResponse(w, r)
+			return
+		}
+
+		claims, err := utils.ValidateToken(tokenParts[1], m.cfg.JWT.Secret)
+		if err != nil {
+			m.errResponse.InvalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		if claims.Platform != platform {
+			m.errResponse.InvalidAuthenticationTokenResponse(w, r)
+			return
+		}
+
+		ctx := r.Context()
+		ctx = utils.WithUserId(ctx, claims.UserId)
+		ctx = utils.WithUserName(ctx, claims.Name)
+		ctx = utils.WithPlatform(ctx, claims.Platform)
+		next.ServeHTTP(w, r.WithContext(ctx))
+
+	})
+}
+
+func NewMiddleware(cfg *config.Config, logger *slog.Logger, errResponse *helper.ErrResponse) *Middleware {
 	return &Middleware{
+		cfg:         cfg,
 		logger:      logger,
 		errResponse: errResponse,
 	}
