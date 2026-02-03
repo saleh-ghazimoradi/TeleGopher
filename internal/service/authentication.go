@@ -16,7 +16,6 @@ import (
 type AuthenticationService interface {
 	Register(ctx context.Context, req *dto.RegisterRequest) (*dto.RegisterResponse, error)
 	Login(ctx context.Context, req *dto.LoginRequest, platform domain.Platform) (*dto.LoginResponse, error)
-	GetUserById(ctx context.Context, userId int64) (*dto.RegisterResponse, error)
 	GetUserByRefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RegisterResponse, error)
 	RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RefreshTokenResponse, error)
 	Logout(ctx context.Context, userId int64, platform domain.Platform) error

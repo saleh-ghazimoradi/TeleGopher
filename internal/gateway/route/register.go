@@ -8,6 +8,7 @@ import (
 type RegisterRoutes struct {
 	healthRoute         *HealthCheckRoute
 	authenticationRoute *AuthenticationRoute
+	userRoute           *UserRoute
 	middleware          *middleware.Middleware
 }
 
@@ -25,6 +26,12 @@ func WithAuthenticationRoute(route *AuthenticationRoute) Options {
 	}
 }
 
+func WithUserRoute(route *UserRoute) Options {
+	return func(r *RegisterRoutes) {
+		r.userRoute = route
+	}
+}
+
 func WithMiddleware(middleware *middleware.Middleware) Options {
 	return func(r *RegisterRoutes) {
 		r.middleware = middleware
@@ -35,6 +42,7 @@ func (r *RegisterRoutes) Register() http.Handler {
 	mux := http.NewServeMux()
 	r.healthRoute.Healthcheck(mux)
 	r.authenticationRoute.AuthenticationRoutes(mux)
+	r.userRoute.UserRoutes(mux)
 	return r.middleware.RecoverPanic(r.middleware.LoggingMiddleware(r.middleware.CORSMiddleware(mux)))
 }
 

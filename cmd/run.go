@@ -69,15 +69,20 @@ var runCmd = &cobra.Command{
 		validator := helper.NewValidator()
 
 		userRepository := repository.NewUserRepository(db, db)
+		userService := service.NewUserService(userRepository)
+
 		authService := service.NewAuthenticationService(cfg, userRepository, txManager)
 		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
 
 		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
 		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
+		userHandler := handler.NewUserHandler(userService)
 		authRoute := route.NewAuthenticationRoute(authHandler, middlewares)
+		userRoute := route.NewUserRoute(userHandler, middlewares)
 		registerRoutes := route.NewRegisterRoutes(
 			route.WithHealthCheckRoute(healthcheckRoute),
 			route.WithAuthenticationRoute(authRoute),
+			route.WithUserRoute(userRoute),
 			route.WithMiddleware(middlewares),
 		)
 
