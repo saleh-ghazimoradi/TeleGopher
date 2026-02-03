@@ -16,6 +16,9 @@ import (
 type AuthenticationService interface {
 	Register(ctx context.Context, req *dto.RegisterRequest) (*dto.RegisterResponse, error)
 	Login(ctx context.Context, req *dto.LoginRequest, platform domain.Platform) (*dto.LoginResponse, error)
+	GetUserById(ctx context.Context, userId int64) (*dto.RegisterResponse, error)
+	GetUserByRefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RegisterResponse, error)
+	RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RefreshTokenResponse, error)
 	Logout(ctx context.Context, userId int64, platform domain.Platform) error
 }
 
@@ -102,6 +105,52 @@ func (a *authenticationService) Login(ctx context.Context, req *dto.LoginRequest
 	return a.toLoginResponse(user, accessToken, refreshToken), nil
 }
 
+func (a *authenticationService) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RefreshTokenResponse, error) {
+	var user *domain.User
+	var accessToken, newRefreshToken string
+
+	err := a.tx.WithTransaction(ctx, func(tx *sql.Tx) error {
+		var err error
+
+		user, err = a.userRepository.WithTx(tx).GetUserByRefreshToken(ctx, req.RefreshToken, platform)
+		if err != nil {
+			if errors.Is(err, repository.ErrRecordNotFound) {
+				return fmt.Errorf("invalid refresh token")
+			}
+			return err
+		}
+
+		accessToken, err = utils.GenerateToken(a.cfg.JWT.Expire, a.cfg.JWT.Secret, user.Id, user.Name, string(platform))
+		if err != nil {
+			return err
+		}
+
+		newRefreshToken, err = utils.GenerateRefreshToken()
+		if err != nil {
+			return err
+		}
+
+		return a.userRepository.WithTx(tx).UpdateRefreshToken(ctx, user.Id, platform, newRefreshToken)
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return a.toRefreshTokenResponse(accessToken, newRefreshToken), nil
+}
+
+func (a *authenticationService) GetUserByRefreshToken(ctx context.Context, req *dto.RefreshTokenRequest, platform domain.Platform) (*dto.RegisterResponse, error) {
+	user, err := a.userRepository.GetUserByRefreshToken(ctx, req.RefreshToken, platform)
+	if err != nil {
+		if errors.Is(err, repository.ErrRecordNotFound) {
+			return nil, fmt.Errorf("invalid refresh token")
+		}
+		return nil, err
+	}
+	return a.toRegisterResponse(user), nil
+}
+
 func (a *authenticationService) Logout(ctx context.Context, userId int64, platform domain.Platform) error {
 	return a.tx.WithTransaction(ctx, func(tx *sql.Tx) error {
 		return a.userRepository.WithTx(tx).DeleteRefreshToken(ctx, userId, platform)
@@ -120,6 +169,13 @@ func (a *authenticationService) toRegisterResponse(user *domain.User) *dto.Regis
 func (a *authenticationService) toLoginResponse(user *domain.User, accessToken, refreshToken string) *dto.LoginResponse {
 	return &dto.LoginResponse{
 		User:         a.toRegisterResponse(user),
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+}
+
+func (a *authenticationService) toRefreshTokenResponse(accessToken, refreshToken string) *dto.RefreshTokenResponse {
+	return &dto.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}

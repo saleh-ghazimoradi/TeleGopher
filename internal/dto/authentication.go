@@ -16,6 +16,10 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 type RegisterResponse struct {
 	Id        int64     `json:"id"`
 	Name      string    `json:"name"`
@@ -27,6 +31,11 @@ type LoginResponse struct {
 	User         *RegisterResponse `json:"user"`
 	AccessToken  string            `json:"access_token"`
 	RefreshToken string            `json:"refresh_token"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func validateEmail(v *helper.Validator, email string) {
@@ -45,6 +54,10 @@ func validateName(v *helper.Validator, name string) {
 	v.Check(len(name) <= 500, "name", "must not be more than 500 characters")
 }
 
+func validateRefreshToken(v *helper.Validator, refreshToken string) {
+	v.Check(refreshToken != "", "refresh_token", "must be provided")
+}
+
 func ValidateRegisterRequest(v *helper.Validator, req *RegisterRequest) {
 	validateName(v, req.Name)
 	validateEmail(v, req.Email)
@@ -54,4 +67,8 @@ func ValidateRegisterRequest(v *helper.Validator, req *RegisterRequest) {
 func ValidateLoginRequest(v *helper.Validator, req *LoginRequest) {
 	validateEmail(v, req.Email)
 	validatePassword(v, req.Password)
+}
+
+func ValidateRefreshTokenRequest(v *helper.Validator, req *RefreshTokenRequest) {
+	validateRefreshToken(v, req.RefreshToken)
 }

@@ -82,6 +82,76 @@ func (a *AuthenticationHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *AuthenticationHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	platform, err := a.extractPlatform(r)
+	if err != nil {
+		a.errResponse.BadRequestResponse(w, r, err)
+		return
+	}
+
+	var payload dto.RefreshTokenRequest
+	if err := helper.ReadJSON(w, r, &payload); err != nil {
+		a.errResponse.BadRequestResponse(w, r, err)
+		return
+	}
+
+	dto.ValidateRefreshTokenRequest(a.validator, &payload)
+	if !a.validator.Valid() {
+		a.errResponse.InvalidCredentialsResponse(w, r)
+		return
+	}
+
+	response, err := a.authenticationService.RefreshToken(r.Context(), &payload, platform)
+	if err != nil {
+		switch {
+		case err.Error() == "invalid refresh token":
+			a.errResponse.InvalidAuthenticationTokenResponse(w, r)
+		default:
+
+			a.errResponse.ServerErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	if err := helper.WriteJSON(w, http.StatusOK, helper.Envelope{"data": response}, nil); err != nil {
+		a.errResponse.ServerErrorResponse(w, r, err)
+	}
+}
+
+func (a *AuthenticationHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	platform, err := a.extractPlatform(r)
+	if err != nil {
+		a.errResponse.BadRequestResponse(w, r, err)
+		return
+	}
+
+	var payload dto.RefreshTokenRequest
+	if err := helper.ReadJSON(w, r, &payload); err != nil {
+		a.errResponse.BadRequestResponse(w, r, err)
+		return
+	}
+
+	dto.ValidateRefreshTokenRequest(a.validator, &payload)
+	if !a.validator.Valid() {
+		a.errResponse.InvalidCredentialsResponse(w, r)
+		return
+	}
+
+	user, err := a.authenticationService.GetUserByRefreshToken(r.Context(), &payload, platform)
+	if err != nil {
+		switch {
+		case err.Error() == "invalid refresh token":
+			a.errResponse.InvalidAuthenticationTokenResponse(w, r)
+		default:
+			a.errResponse.ServerErrorResponse(w, r, err)
+		}
+	}
+
+	if err := helper.WriteJSON(w, http.StatusOK, helper.Envelope{"user": user}, nil); err != nil {
+		a.errResponse.ServerErrorResponse(w, r, err)
+	}
+}
+
 func (a *AuthenticationHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	userId, ok := utils.WithIdFromContext(r.Context())
 	if !ok {
