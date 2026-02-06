@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	infra "github.com/saleh-ghazimoradi/TeleGopher/infra/TXManager"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/dto"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
@@ -14,6 +15,7 @@ type UserService interface {
 
 type userService struct {
 	userRepository repository.UserRepository
+	tx             infra.TxManager
 }
 
 func (u *userService) GetUserById(ctx context.Context, userId int64) (*dto.RegisterResponse, error) {
@@ -34,8 +36,9 @@ func (u *userService) toRegisterResponse(user *domain.User) *dto.RegisterRespons
 	}
 }
 
-func NewUserService(repository repository.UserRepository) UserService {
+func NewUserService(repository repository.UserRepository, tx infra.TxManager) UserService {
 	return &userService{
 		userRepository: repository,
+		tx:             tx,
 	}
 }
