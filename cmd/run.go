@@ -63,26 +63,44 @@ var runCmd = &cobra.Command{
 			}
 		}()
 
+		/*----------Dependencies----------*/
 		txManager := infra.NewTxManager(db)
 		errResponse := helper.NewErrResponse(logger)
 		middlewares := middleware.NewMiddleware(cfg, logger, errResponse)
 		validator := helper.NewValidator()
 
+		/*----------Repositories----------*/
 		userRepository := repository.NewUserRepository(db, db)
-		userService := service.NewUserService(userRepository)
+		PrivateRepository := repository.NewPrivateRepository(db, db)
+		messageRepository := repository.NewMessageRepository(db, db)
 
+		/*----------Services----------*/
 		authService := service.NewAuthenticationService(cfg, userRepository, txManager)
-		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
+		userService := service.NewUserService(userRepository, txManager)
+		privateService := service.NewPrivateService(PrivateRepository, txManager)
+		messageService := service.NewMessageService(messageRepository, PrivateRepository, txManager)
 
+		/*----------Handlers----------*/
 		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
-		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
+		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
 		userHandler := handler.NewUserHandler(userService)
+		privateHandler := handler.NewPrivateHandler(errResponse, privateService)
+		messageHandler := handler.NewMessageHandler(errResponse, messageService)
+
+		/*----------Routes----------*/
+		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
 		authRoute := route.NewAuthenticationRoute(authHandler, middlewares)
 		userRoute := route.NewUserRoute(userHandler, middlewares)
+		privateRoute := route.NewPrivateRoute(privateHandler, middlewares)
+		messageRoute := route.NewMessageRoute(messageHandler, middlewares)
+
+		/*----------Route Registery----------*/
 		registerRoutes := route.NewRegisterRoutes(
 			route.WithHealthCheckRoute(healthcheckRoute),
 			route.WithAuthenticationRoute(authRoute),
 			route.WithUserRoute(userRoute),
+			route.WithPrivateRoute(privateRoute),
+			route.WithMessageRoute(messageRoute),
 			route.WithMiddleware(middlewares),
 		)
 

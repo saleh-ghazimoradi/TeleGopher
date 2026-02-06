@@ -9,6 +9,9 @@ type RegisterRoutes struct {
 	healthRoute         *HealthCheckRoute
 	authenticationRoute *AuthenticationRoute
 	userRoute           *UserRoute
+	privateRoute        *PrivateRoute
+	messageRoute        *MessageRoute
+	uploadFileRoute     *UploadFileRoute
 	middleware          *middleware.Middleware
 }
 
@@ -32,6 +35,24 @@ func WithUserRoute(route *UserRoute) Options {
 	}
 }
 
+func WithPrivateRoute(privateRoute *PrivateRoute) Options {
+	return func(r *RegisterRoutes) {
+		r.privateRoute = privateRoute
+	}
+}
+
+func WithMessageRoute(messageRoute *MessageRoute) Options {
+	return func(r *RegisterRoutes) {
+		r.messageRoute = messageRoute
+	}
+}
+
+func WithUploadFileRoute(uploadFileRoute *UploadFileRoute) Options {
+	return func(r *RegisterRoutes) {
+		r.uploadFileRoute = uploadFileRoute
+	}
+}
+
 func WithMiddleware(middleware *middleware.Middleware) Options {
 	return func(r *RegisterRoutes) {
 		r.middleware = middleware
@@ -43,6 +64,9 @@ func (r *RegisterRoutes) Register() http.Handler {
 	r.healthRoute.Healthcheck(mux)
 	r.authenticationRoute.AuthenticationRoutes(mux)
 	r.userRoute.UserRoutes(mux)
+	r.privateRoute.PrivateRoutes(mux)
+	r.messageRoute.MessageRoutes(mux)
+	r.uploadFileRoute.UploadFileRoutes(mux)
 	return r.middleware.RecoverPanic(r.middleware.LoggingMiddleware(r.middleware.CORSMiddleware(mux)))
 }
 
