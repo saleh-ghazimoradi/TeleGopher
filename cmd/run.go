@@ -85,7 +85,8 @@ var runCmd = &cobra.Command{
 		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
 		userHandler := handler.NewUserHandler(userService)
 		privateHandler := handler.NewPrivateHandler(errResponse, privateService)
-		messageHandler := handler.NewMessageHandler(errResponse, messageService)
+		messageHandler := handler.NewMessageHandler(errResponse, validator, messageService)
+		uploadFileHandler := handler.NewUploadFileHandler(errResponse)
 
 		/*----------Routes----------*/
 		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
@@ -93,6 +94,7 @@ var runCmd = &cobra.Command{
 		userRoute := route.NewUserRoute(userHandler, middlewares)
 		privateRoute := route.NewPrivateRoute(privateHandler, middlewares)
 		messageRoute := route.NewMessageRoute(messageHandler, middlewares)
+		uploadFileRoute := route.NewUploadFileRoute(uploadFileHandler, middlewares)
 
 		/*----------Route Registery----------*/
 		registerRoutes := route.NewRegisterRoutes(
@@ -101,6 +103,7 @@ var runCmd = &cobra.Command{
 			route.WithUserRoute(userRoute),
 			route.WithPrivateRoute(privateRoute),
 			route.WithMessageRoute(messageRoute),
+			route.WithUploadFileRoute(uploadFileRoute),
 			route.WithMiddleware(middlewares),
 		)
 
