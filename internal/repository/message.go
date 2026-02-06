@@ -10,9 +10,9 @@ import (
 
 type MessageRepository interface {
 	CreateMessage(ctx context.Context, message *domain.Message) error
-	GetMessageByPrivateId(ctx context.Context, privateId, page, limit int) ([]domain.Message, error)
 	GetMessageById(ctx context.Context, messageId int64) (*domain.Message, error)
-	GetUndeliveredMessageByPrivateId(ctx context.Context, privateId int64) ([]domain.Message, error)
+	GetMessageByPrivateId(ctx context.Context, privateId int64, page, limit int) ([]domain.Message, error)
+	GetUndeliveredMessagesByPrivateId(ctx context.Context, privateId int64) ([]domain.Message, error)
 	MarkMessageRead(ctx context.Context, messageId int64) error
 	MarkMessageDelivered(ctx context.Context, messageId int64) error
 	WithTx(tx *sql.Tx) MessageRepository
@@ -39,7 +39,7 @@ func (m *messageRepository) CreateMessage(ctx context.Context, message *domain.M
 	return nil
 }
 
-func (m *messageRepository) GetMessageByPrivateId(ctx context.Context, privateId, page, limit int) ([]domain.Message, error) {
+func (m *messageRepository) GetMessageByPrivateId(ctx context.Context, privateId int64, page, limit int) ([]domain.Message, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -116,7 +116,7 @@ func (m *messageRepository) GetMessageById(ctx context.Context, messageId int64)
 	return message, nil
 }
 
-func (m *messageRepository) GetUndeliveredMessageByPrivateId(ctx context.Context, privateId int64) ([]domain.Message, error) {
+func (m *messageRepository) GetUndeliveredMessagesByPrivateId(ctx context.Context, privateId int64) ([]domain.Message, error) {
 	query := `
 		SELECT id, from_id, private_id, message_type, content, delivered, read, created_at, version
 		FROM messages
@@ -203,10 +203,9 @@ func (m *messageRepository) WithTx(tx *sql.Tx) MessageRepository {
 	}
 }
 
-func NewMessageRepository(dbWrite *sql.DB, dbRead *sql.DB, tx *sql.Tx) MessageRepository {
+func NewMessageRepository(dbWrite *sql.DB, dbRead *sql.DB) MessageRepository {
 	return &messageRepository{
 		dbWrite: dbWrite,
 		dbRead:  dbRead,
-		tx:      tx,
 	}
 }
