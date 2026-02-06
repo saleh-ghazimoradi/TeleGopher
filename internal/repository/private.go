@@ -43,7 +43,7 @@ func (p *privateRepository) CreatePrivate(ctx context.Context, user1Id, user2Id 
 
 	query := `
 		INSERT INTO privates (user1_id, user2_id)
-		VALUES ($1, $2, $3)
+		VALUES ($1, $2)
 		RETURNING id, user1_id, user2_id, created_at, version
 	`
 
@@ -111,7 +111,10 @@ func (p *privateRepository) GetPrivateByUsers(ctx context.Context, user1Id, user
 func (p *privateRepository) GetPrivateForUser(ctx context.Context, userId int64) ([]domain.Private, error) {
 	privates := make([]domain.Private, 0)
 
-	query := `SELECT id, user1_id, user2_id, created_at, version FROM privates WHERE user1_id = $1 OR user2_id = $2 ORDER BY created_at DESC`
+	query := `SELECT id, user1_id, user2_id, created_at, version 
+          FROM privates 
+          WHERE user1_id = $1 OR user2_id = $2
+          ORDER BY created_at DESC`
 
 	rows, err := querier(p.dbRead, p.tx).QueryContext(ctx, query, userId)
 	if err != nil {
@@ -142,10 +145,9 @@ func (p *privateRepository) WithTx(tx *sql.Tx) PrivateRepository {
 	}
 }
 
-func NewPrivateRepository(dbWrite *sql.DB, dbRead *sql.DB, tx *sql.Tx) PrivateRepository {
+func NewPrivateRepository(dbWrite *sql.DB, dbRead *sql.DB) PrivateRepository {
 	return &privateRepository{
 		dbWrite: dbWrite,
 		dbRead:  dbRead,
-		tx:      tx,
 	}
 }
