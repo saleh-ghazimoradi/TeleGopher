@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/ws"
 	"log"
 	"log/slog"
 	"net/http"
@@ -22,6 +23,7 @@ type Server struct {
 	IdleTimeout  time.Duration
 	ErrLog       *log.Logger
 	Logger       *slog.Logger
+	hub          *ws.Hub
 }
 
 type Options func(*Server)
@@ -59,6 +61,12 @@ func WithWriteTimeout(timeout time.Duration) Options {
 func WithIdleTimeout(timeout time.Duration) Options {
 	return func(s *Server) {
 		s.IdleTimeout = timeout
+	}
+}
+
+func WithHub(hub *ws.Hub) Options {
+	return func(s *Server) {
+		s.hub = hub
 	}
 }
 
@@ -104,6 +112,8 @@ func (s *Server) Connect() error {
 		if err != nil {
 			shutdownError <- err
 		}
+
+		s.hub.Shutdown()
 
 		s.Logger.Info("completing background tasks", "addr", server.Addr)
 		shutdownError <- nil
