@@ -12,6 +12,7 @@ import (
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/server"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/ws"
 	"log/slog"
 	"os"
 
@@ -80,6 +81,10 @@ var runCmd = &cobra.Command{
 		privateService := service.NewPrivateService(PrivateRepository, txManager)
 		messageService := service.NewMessageService(messageRepository, PrivateRepository, txManager)
 
+		/*----------Services----------*/
+		hub := ws.NewHub()
+		//TODO: Where should I handle the hub.shutdown?
+
 		/*----------Handlers----------*/
 		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
 		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
@@ -116,6 +121,7 @@ var runCmd = &cobra.Command{
 			server.WithIdleTimeout(cfg.Server.IdleTimeout),
 			server.WithErrLog(slog.NewLogLogger(logger.Handler(), slog.LevelError)),
 			server.WithLogger(logger),
+			server.WithHub(hub),
 		)
 
 		logger.Info("Server is running on:", "port", cfg.Server.Port)
@@ -123,7 +129,6 @@ var runCmd = &cobra.Command{
 			logger.Error("error connecting to server", "err", err.Error())
 			os.Exit(1)
 		}
-
 	},
 }
 
