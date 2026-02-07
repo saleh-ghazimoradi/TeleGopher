@@ -14,3 +14,11 @@ type User struct {
 	CreatedAt            time.Time
 	Version              int
 }
+
+func (u *User) ToMap() map[string]any {
+	return map[string]any{
+		"id":    u.Id,
+		"name":  u.Name,
+		"email": u.Email,
+	}
+}
