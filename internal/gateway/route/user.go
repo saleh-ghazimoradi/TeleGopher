@@ -12,9 +12,8 @@ type UserRoute struct {
 }
 
 func (u *UserRoute) UserRoutes(mux *http.ServeMux) {
-	protected := http.NewServeMux()
-	protected.HandleFunc("GET /v1/users/{id}", u.userHandler.GetUserById)
-	mux.Handle("/v1/users/", u.middleware.AuthMiddleware(protected))
+	mux.HandleFunc("GET /v1/users/{id}",
+		u.middleware.Authenticate(u.userHandler.GetUserById))
 }
 
 func NewUserRoute(userHandler *handler.UserHandler, middleware *middleware.Middleware) *UserRoute {

@@ -12,6 +12,7 @@ type RegisterRoutes struct {
 	privateRoute        *PrivateRoute
 	messageRoute        *MessageRoute
 	uploadFileRoute     *UploadFileRoute
+	wsRoute             *WSRoute
 	middleware          *middleware.Middleware
 }
 
@@ -53,6 +54,12 @@ func WithUploadFileRoute(uploadFileRoute *UploadFileRoute) Options {
 	}
 }
 
+func WithWSRoute(wsRoute *WSRoute) Options {
+	return func(r *RegisterRoutes) {
+		r.wsRoute = wsRoute
+	}
+}
+
 func WithMiddleware(middleware *middleware.Middleware) Options {
 	return func(r *RegisterRoutes) {
 		r.middleware = middleware
@@ -67,7 +74,8 @@ func (r *RegisterRoutes) Register() http.Handler {
 	r.privateRoute.PrivateRoutes(mux)
 	r.messageRoute.MessageRoutes(mux)
 	r.uploadFileRoute.UploadFileRoutes(mux)
-	return r.middleware.RecoverPanic(r.middleware.LoggingMiddleware(r.middleware.CORSMiddleware(mux)))
+	r.wsRoute.WSRoutes(mux)
+	return r.middleware.Recover(r.middleware.Logging(r.middleware.CORS(mux.ServeHTTP)))
 }
 
 func NewRegisterRoutes(opts ...Options) *RegisterRoutes {

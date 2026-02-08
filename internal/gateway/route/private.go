@@ -12,13 +12,14 @@ type PrivateRoute struct {
 }
 
 func (p *PrivateRoute) PrivateRoutes(mux *http.ServeMux) {
-	protected := http.NewServeMux()
+	mux.HandleFunc("POST /v1/conversations/privates",
+		p.middleware.Authenticate(p.privateHandler.CreatePrivate))
 
-	protected.HandleFunc("GET /v1/conversations/privates/{private_id}", p.privateHandler.GetPrivate)
-	protected.HandleFunc("POST /v1/conversations/privates", p.privateHandler.CreatePrivate)
-	protected.HandleFunc("GET /v1/conversations", p.privateHandler.GetConversations)
+	mux.HandleFunc("GET /v1/conversations/privates/{private_id}",
+		p.middleware.Authenticate(p.privateHandler.GetPrivate))
 
-	mux.Handle("/v1/conversations/", p.middleware.AuthMiddleware(protected))
+	mux.HandleFunc("GET /v1/conversations",
+		p.middleware.Authenticate(p.privateHandler.GetConversations))
 }
 
 func NewPrivateRoute(privateHandler *handler.PrivateHandler, middleware *middleware.Middleware) *PrivateRoute {

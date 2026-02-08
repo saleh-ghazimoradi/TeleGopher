@@ -12,16 +12,20 @@ type MessageRoute struct {
 }
 
 func (m *MessageRoute) MessageRoutes(mux *http.ServeMux) {
-	protected := http.NewServeMux()
+	mux.HandleFunc("POST /v1/messages",
+		m.middleware.Authenticate(m.messageHandler.SendMessage))
 
-	protected.HandleFunc("POST /v1/messages", m.messageHandler.SendMessage)
-	protected.HandleFunc("GET /v1/messages/{id}", m.messageHandler.GetMessage)
-	protected.HandleFunc("GET /v1/conversations/privates/{private_id}/messages", m.messageHandler.GetPrivateMessages)
-	protected.HandleFunc("PATCH /v1/messages/{id}/read", m.messageHandler.MarkMessageAsRead)
-	protected.HandleFunc("PATCH /v1/messages/{id}/delivered", m.messageHandler.MarkMessageAsDelivered)
+	mux.HandleFunc("GET /v1/messages/{id}",
+		m.middleware.Authenticate(m.messageHandler.GetMessage))
 
-	mux.Handle("/v1/messages/", m.middleware.AuthMiddleware(protected))
-	mux.Handle("/v1/conversations/privates/", m.middleware.AuthMiddleware(protected))
+	mux.HandleFunc("GET /v1/conversations/privates/{private_id}/messages",
+		m.middleware.Authenticate(m.messageHandler.GetPrivateMessages))
+
+	mux.HandleFunc("PATCH /v1/messages/{id}/read",
+		m.middleware.Authenticate(m.messageHandler.MarkMessageAsRead))
+
+	mux.HandleFunc("PATCH /v1/messages/{id}/delivered",
+		m.middleware.Authenticate(m.messageHandler.MarkMessageAsDelivered))
 }
 
 func NewMessageRoute(messageHandler *handler.MessageHandler, middleware *middleware.Middleware) *MessageRoute {
