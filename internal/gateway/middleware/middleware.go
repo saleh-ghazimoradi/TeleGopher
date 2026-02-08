@@ -17,41 +17,43 @@ type Middleware struct {
 	errResponse *helper.ErrResponse
 }
 
-func (m *Middleware) LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) Logging(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		m.logger.Info("Incoming request: ", "method", r.Method, "path", r.URL.Path, "protocol", r.Proto, "remote_addr", r.RemoteAddr)
-		next.ServeHTTP(w, r)
-	})
+		next(w, r)
+	}
 }
 
-func (m *Middleware) CORSMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) CORS(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Platform")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
+
+		next(w, r)
+	}
 }
 
-func (m *Middleware) RecoverPanic(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) Recover(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
 				w.Header().Set("Connection", "close")
 				m.errResponse.ServerErrorResponse(w, r, fmt.Errorf("%v", err))
 			}
 		}()
-		next.ServeHTTP(w, r)
-	})
+		next(w, r)
+	}
 }
 
-func (m *Middleware) AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (m *Middleware) Authenticate(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			m.errResponse.InvalidCredentialsResponse(w, r)
@@ -85,9 +87,8 @@ func (m *Middleware) AuthMiddleware(next http.Handler) http.Handler {
 		ctx = utils.WithUserId(ctx, claims.UserId)
 		ctx = utils.WithUserName(ctx, claims.Name)
 		ctx = utils.WithPlatform(ctx, claims.Platform)
-		next.ServeHTTP(w, r.WithContext(ctx))
-
-	})
+		next(w, r.WithContext(ctx))
+	}
 }
 
 func NewMiddleware(cfg *config.Config, logger *slog.Logger, errResponse *helper.ErrResponse) *Middleware {
