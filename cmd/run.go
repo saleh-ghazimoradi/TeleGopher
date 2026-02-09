@@ -81,9 +81,8 @@ var runCmd = &cobra.Command{
 		privateService := service.NewPrivateService(PrivateRepository, txManager)
 		messageService := service.NewMessageService(messageRepository, PrivateRepository, txManager)
 
-		/*----------Services----------*/
-		hub := ws.NewHub()
-		//TODO: Where should I handle the hub.shutdown?
+		/*----------WS----------*/
+		hub := ws.NewHub(messageService, privateService)
 
 		/*----------Handlers----------*/
 		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
@@ -92,6 +91,7 @@ var runCmd = &cobra.Command{
 		privateHandler := handler.NewPrivateHandler(errResponse, privateService)
 		messageHandler := handler.NewMessageHandler(errResponse, validator, messageService)
 		uploadFileHandler := handler.NewUploadFileHandler(errResponse)
+		wsHandler := handler.NewWSHandler(errResponse, cfg, userService, messageService, hub)
 
 		/*----------Routes----------*/
 		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
@@ -100,6 +100,7 @@ var runCmd = &cobra.Command{
 		privateRoute := route.NewPrivateRoute(privateHandler, middlewares)
 		messageRoute := route.NewMessageRoute(messageHandler, middlewares)
 		uploadFileRoute := route.NewUploadFileRoute(uploadFileHandler, middlewares)
+		wsRoute := route.NewWSRoute(wsHandler)
 
 		/*----------Route Registery----------*/
 		registerRoutes := route.NewRegisterRoutes(
@@ -109,6 +110,7 @@ var runCmd = &cobra.Command{
 			route.WithPrivateRoute(privateRoute),
 			route.WithMessageRoute(messageRoute),
 			route.WithUploadFileRoute(uploadFileRoute),
+			route.WithWSRoute(wsRoute),
 			route.WithMiddleware(middlewares),
 		)
 

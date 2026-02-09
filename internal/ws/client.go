@@ -33,6 +33,6 @@ func NewClient(user *domain.User, conn *websocket.Conn) *Client {
 	return &Client{
 		User: user,
 		Conn: conn,
-		Send: make(chan Event),
+		Send: make(chan Event, 512),
 	}
 }

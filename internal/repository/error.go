@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrRecordNotFound       = errors.New("record not found")
 	ErrDuplicateEmail       = errors.New("duplicate email")
-	ErrPrivateAlreadyExists = errors.New("private chat already exists")
-	ErrSameUser             = errors.New("cannot create private chat with same user")
+	ErrPrivateNotFound      = errors.New("private conversation not found")
+	ErrPrivateAlreadyExists = errors.New("private conversation already exists between these users")
+	ErrSameUser             = errors.New("cannot create private chat with yourself")
 )

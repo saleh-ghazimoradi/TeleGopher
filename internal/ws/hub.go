@@ -1,24 +1,25 @@
 package ws
 
 import (
-	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
+	"context"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
 	"log"
 	"sync"
 )
 
 type Hub struct {
-	privateRepository repository.PrivateRepository
-	messageRepository repository.MessageRepository
-	Clients           map[int64]map[*Client]struct{}
-	mu                sync.RWMutex
+	privateService service.PrivateService
+	messageService service.MessageService
+	clients        map[int64]map[*Client]struct{}
+	mu             sync.RWMutex
 }
 
 func (h *Hub) RegisterClient(client *Client) {
 	h.mu.Lock()
-	conns, ok := h.Clients[client.User.Id]
+	conns, ok := h.clients[client.User.Id]
 	if !ok {
 		conns = make(map[*Client]struct{})
-		h.Clients[client.User.Id] = conns
+		h.clients[client.User.Id] = conns
 	}
 	conns[client] = struct{}{}
 	firstConnection := len(conns) == 1
@@ -31,13 +32,14 @@ func (h *Hub) RegisterClient(client *Client) {
 		})
 
 		go func() {
-			privates, err := h.privateRepository.GetPrivateForUser(nil, client.User.Id)
+			ctx := context.Background()
+			privates, err := h.privateService.GetUserPrivates(ctx, client.User.Id)
 			if err != nil {
 				log.Println("failed to get privates:", err)
 				return
 			}
 			for _, private := range privates {
-				msgs, err := h.messageRepository.GetUndeliveredMessagesByPrivateId(nil, private.Id)
+				msgs, err := h.messageService.GetUndeliveredMessages(ctx, private.Id, client.User.Id)
 				if err != nil {
 					log.Println("failed to get undelivered messages:", err)
 					continue
@@ -63,7 +65,7 @@ func (h *Hub) SendCurrentClients(client *Client) {
 	users := make([]map[string]any, 0)
 	seen := make(map[int64]struct{})
 
-	for userId, conns := range h.Clients {
+	for userId, conns := range h.clients {
 		if userId == client.User.Id {
 			continue
 		}
@@ -88,7 +90,7 @@ func (h *Hub) SendCurrentClients(client *Client) {
 
 func (h *Hub) UnregisterClient(client *Client) {
 	h.mu.Lock()
-	conns, ok := h.Clients[client.User.Id]
+	conns, ok := h.clients[client.User.Id]
 	if !ok {
 		h.mu.Unlock()
 		return
@@ -97,7 +99,7 @@ func (h *Hub) UnregisterClient(client *Client) {
 	delete(conns, client)
 	noConnectionLeft := len(conns) == 0
 	if noConnectionLeft {
-		delete(h.Clients, client.User.Id)
+		delete(h.clients, client.User.Id)
 	}
 
 	h.mu.Unlock()
@@ -114,7 +116,7 @@ func (h *Hub) GetClients(userId int64) ([]*Client, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	conns, ok := h.Clients[userId]
+	conns, ok := h.clients[userId]
 	if !ok || len(conns) == 0 {
 		return nil, false
 	}
@@ -130,7 +132,7 @@ func (h *Hub) GetClients(userId int64) ([]*Client, bool) {
 func (h *Hub) SendEventToUserIds(userIds []int64, senderId int64, event EventType, payload map[string]any) {
 	for _, userId := range userIds {
 		h.mu.RLock()
-		conns, ok := h.Clients[userId]
+		conns, ok := h.clients[userId]
 		h.mu.RUnlock()
 		if !ok {
 			continue
@@ -148,7 +150,7 @@ func (h *Hub) SendEventToUserIds(userIds []int64, senderId int64, event EventTyp
 func (h *Hub) BroadcastToAll(event Event) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for _, client := range h.Clients {
+	for _, client := range h.clients {
 		for c := range client {
 			select {
 			case c.Send <- event:
@@ -178,7 +180,7 @@ func (h *Hub) Shutdown() {
 
 	log.Println("shutting down Hub, notifying all clients...")
 
-	for _, conns := range h.Clients {
+	for _, conns := range h.clients {
 		for client := range conns {
 			client.SendEvent(Event{
 				EventType: EventServerShutdown,
@@ -187,12 +189,14 @@ func (h *Hub) Shutdown() {
 			client.Close()
 		}
 	}
-	h.Clients = make(map[int64]map[*Client]struct{})
+	h.clients = make(map[int64]map[*Client]struct{})
 	log.Println("Hub shutdown complete")
 }
 
-func NewHub() *Hub {
+func NewHub(messageService service.MessageService, privateService service.PrivateService) *Hub {
 	return &Hub{
-		Clients: make(map[int64]map[*Client]struct{}),
+		messageService: messageService,
+		privateService: privateService,
+		clients:        make(map[int64]map[*Client]struct{}),
 	}
 }

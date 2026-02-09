@@ -74,6 +74,7 @@ func (m *messageRepository) GetMessageByPrivateId(ctx context.Context, privateId
 			&msg.Delivered,
 			&msg.Read,
 			&msg.CreatedAt,
+			&msg.Version,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
@@ -142,6 +143,7 @@ func (m *messageRepository) GetUndeliveredMessagesByPrivateId(ctx context.Contex
 			&msg.Delivered,
 			&msg.Read,
 			&msg.CreatedAt,
+			&msg.Version,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
