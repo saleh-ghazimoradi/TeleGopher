@@ -2,207 +2,157 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
+	"gorm.io/gorm"
 	"time"
 )
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
-	GetUserById(ctx context.Context, id int64) (*domain.User, error)
+	GetUserById(ctx context.Context, id uint) (*domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
-	GetUserByRefreshToken(ctx context.Context, refreshToken string, platform domain.Platform) (*domain.User, error)
-	UpdateRefreshToken(ctx context.Context, userId int64, platform domain.Platform, refreshToken string) error
-	DeleteRefreshToken(ctx context.Context, userId int64, platform domain.Platform) error
-	WithTx(tx *sql.Tx) UserRepository
+	UpdateUser(ctx context.Context, user *domain.User) error
+	DeleteUser(ctx context.Context, id uint) error
+
+	GetUserByRefreshToken(ctx context.Context, refreshToken string, platform string) (*domain.User, error)
+	UpdateRefreshToken(ctx context.Context, userId uint, refreshToken string, platform string) error
+	DeleteRefreshToken(ctx context.Context, userId uint, platform string) error
 }
 
 type userRepository struct {
-	dbWrite *sql.DB
-	dbRead  *sql.DB
-	tx      *sql.Tx
+	dbWrite *gorm.DB
+	dbRead  *gorm.DB
 }
 
 func (u *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	query := `
-		INSERT INTO users (name, email, password)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at, version`
+	return u.dbWrite.WithContext(ctx).Create(&user).Error
+}
 
-	args := []any{user.Name, user.Email, user.Password}
-
-	if err := querier(u.dbWrite, u.tx).QueryRowContext(ctx, query, args...).Scan(&user.Id, &user.CreatedAt, &user.Version); err != nil {
-		if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
-			return ErrDuplicateEmail
+func (u *userRepository) GetUserById(ctx context.Context, id uint) (*domain.User, error) {
+	var user domain.User
+	if err := u.dbRead.WithContext(ctx).First(&user, id).Error; err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
 		}
-		return fmt.Errorf("create user: %w", err)
+	}
+	return &user, nil
+}
+
+func (u *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	var user domain.User
+	if err := u.dbRead.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &user, nil
+}
+
+func (u *userRepository) UpdateUser(ctx context.Context, user *domain.User) error {
+	return u.dbWrite.WithContext(ctx).Save(&user).Error
+}
+
+func (u *userRepository) DeleteUser(ctx context.Context, id uint) error {
+	return u.dbWrite.WithContext(ctx).Delete(&domain.User{}, id).Error
+}
+
+func (u *userRepository) GetUserByRefreshToken(ctx context.Context, refreshToken string, platform string) (*domain.User, error) {
+	var user domain.User
+
+	condition := u.buildRefreshTokenCondition(platform, refreshToken)
+	if condition == nil {
+		return nil, errors.New("invalid platform")
+	}
+
+	if err := u.dbRead.WithContext(ctx).Where(condition).First(&user).Error; err != nil {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
+}
+
+func (u *userRepository) UpdateRefreshToken(ctx context.Context, userId uint, refreshToken string, platform string) error {
+	updates := u.buildRefreshTokenUpdate(platform, refreshToken)
+	if updates == nil {
+		return errors.New("invalid platform")
+	}
+	updates["version"] = gorm.Expr("version + 1")
+
+	return u.dbWrite.WithContext(ctx).Model(&domain.User{}).Where("id = ?", userId).Updates(updates).Error
+}
+
+func (u *userRepository) DeleteRefreshToken(ctx context.Context, userId uint, platform string) error {
+	updates := u.buildRefreshTokenDeletion(platform)
+	if updates == nil {
+		return fmt.Errorf("invalid platform: %s", platform)
+	}
+
+	updates["version"] = gorm.Expr("version + 1")
+
+	return u.dbWrite.WithContext(ctx).Model(&domain.User{}).Where("id = ?", userId).Updates(updates).Error
+}
+
+func (u *userRepository) buildRefreshTokenCondition(platform string, refreshToken string) map[string]any {
+	if platform == "web" {
+		return map[string]any{
+			"refresh_token_web": refreshToken,
+		}
+	}
+	if platform == "mobile" {
+		return map[string]any{
+			"refresh_token_mobile": refreshToken,
+		}
+	}
+	return nil
+}
+
+func (u *userRepository) buildRefreshTokenUpdate(platform string, refreshToken string) map[string]any {
+	if platform == "web" {
+		return map[string]any{
+			"refresh_token_web":    refreshToken,
+			"refresh_token_web_at": time.Now(),
+		}
+	}
+	if platform == "mobile" {
+		return map[string]any{
+			"refresh_token_mobile":    refreshToken,
+			"refresh_token_mobile_at": time.Now(),
+		}
 	}
 
 	return nil
 }
 
-func (u *userRepository) GetUserById(ctx context.Context, id int64) (*domain.User, error) {
-	query := `SELECT id, name, email, password, refresh_token_web, refresh_token_web_at, refresh_token_mobile, refresh_token_mobile_at, created_at, version FROM users WHERE id = $1`
-
-	user := &domain.User{}
-
-	if err := querier(u.dbRead, u.tx).QueryRowContext(ctx, query, id).Scan(
-		&user.Id,
-		&user.Name,
-		&user.Email,
-		&user.Password,
-		&user.RefreshTokenWeb,
-		&user.RefreshTokenWebAt,
-		&user.RefreshTokenMobile,
-		&user.RefreshTokenMobileAt,
-		&user.CreatedAt,
-		&user.Version,
-	); err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
+func (u *userRepository) buildRefreshTokenDeletion(platform string) map[string]any {
+	if platform == "web" {
+		return map[string]any{
+			"refresh_token_web":    nil,
+			"refresh_token_web_at": nil,
 		}
 	}
-	return user, nil
-}
-
-func (u *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	query := `SELECT id, name, email, password, refresh_token_web, refresh_token_web_at, refresh_token_mobile, refresh_token_mobile_at, created_at, version FROM users WHERE email = $1`
-
-	user := &domain.User{}
-
-	if err := querier(u.dbRead, u.tx).QueryRowContext(ctx, query, email).Scan(
-		&user.Id,
-		&user.Name,
-		&user.Email,
-		&user.Password,
-		&user.RefreshTokenWeb,
-		&user.RefreshTokenWebAt,
-		&user.RefreshTokenMobile,
-		&user.RefreshTokenMobileAt,
-		&user.CreatedAt,
-		&user.Version,
-	); err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		default:
-			return nil, err
+	if platform == "mobile" {
+		return map[string]any{
+			"refresh_token_mobile":    nil,
+			"refresh_token_mobile_at": nil,
 		}
 	}
-
-	return user, nil
+	return nil
 }
 
-func (u *userRepository) GetUserByRefreshToken(ctx context.Context, refreshToken string, platform domain.Platform) (*domain.User, error) {
-	user := &domain.User{}
-	var query string
-	switch platform {
-	case domain.PlatformWeb:
-		query = `SELECT id, name, email, password,
-		                refresh_token_web, refresh_token_web_at,
-		                refresh_token_mobile, refresh_token_mobile_at,
-		                created_at, version
-		         FROM users 
-		         WHERE refresh_token_web = $1`
-
-	case domain.PlatformMobile:
-		query = `SELECT id, name, email, password,
-		                refresh_token_web, refresh_token_web_at,
-		                refresh_token_mobile, refresh_token_mobile_at,
-		                created_at, version
-		         FROM users 
-		         WHERE refresh_token_mobile = $1`
-	default:
-		return nil, fmt.Errorf("invalid platform: %s", platform)
-	}
-
-	if err := querier(u.dbRead, u.tx).QueryRowContext(ctx, query, refreshToken).Scan(
-		&user.Id, &user.Name, &user.Email, &user.Password,
-		&user.RefreshTokenWeb, &user.RefreshTokenWebAt,
-		&user.RefreshTokenMobile, &user.RefreshTokenMobileAt,
-		&user.CreatedAt, &user.Version); err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return nil, ErrRecordNotFound
-		}
-		return nil, err
-	}
-
-	return user, nil
-}
-
-func (u *userRepository) UpdateRefreshToken(ctx context.Context, userId int64, platform domain.Platform, refreshToken string) error {
-	var query string
-
-	switch platform {
-	case domain.PlatformWeb:
-		query = `
-			UPDATE users 
-			SET refresh_token_web = $1, 
-			    refresh_token_web_at = $2,
-			    version = version + 1
-			WHERE id = $3
-		`
-		_, err := querier(u.dbWrite, u.tx).ExecContext(ctx, query, refreshToken, time.Now(), userId)
-		return err
-
-	case domain.PlatformMobile:
-		query = `
-			UPDATE users 
-			SET refresh_token_mobile = $1, 
-			    refresh_token_mobile_at = $2,
-			    version = version + 1
-			WHERE id = $3
-		`
-		_, err := querier(u.dbWrite, u.tx).ExecContext(ctx, query, refreshToken, time.Now(), userId)
-		return err
-	default:
-		return fmt.Errorf("invalid platform: %s", platform)
-	}
-}
-
-func (u *userRepository) DeleteRefreshToken(ctx context.Context, userId int64, platform domain.Platform) error {
-	var query string
-
-	switch platform {
-	case domain.PlatformWeb:
-		query = `
-			UPDATE users 
-			SET refresh_token_web = NULL, 
-			    refresh_token_web_at = NULL,
-			    version = version + 1
-			WHERE id = $1
-		`
-	case domain.PlatformMobile:
-		query = `
-			UPDATE users 
-			SET refresh_token_mobile = NULL, 
-			    refresh_token_mobile_at = NULL,
-			    version = version + 1
-			WHERE id = $1
-		`
-	default:
-		return fmt.Errorf("invalid platform: %s", platform)
-	}
-
-	_, err := querier(u.dbWrite, u.tx).ExecContext(ctx, query, userId)
-	return err
-}
-
-func (u *userRepository) WithTx(tx *sql.Tx) UserRepository {
-	return &userRepository{
-		dbWrite: u.dbWrite,
-		dbRead:  u.dbRead,
-		tx:      tx,
-	}
-}
-
-func NewUserRepository(dbWrite, dbRead *sql.DB) UserRepository {
+func NewUserRepository(dbWrite, dbRead *gorm.DB) UserRepository {
 	return &userRepository{
 		dbWrite: dbWrite,
 		dbRead:  dbRead,

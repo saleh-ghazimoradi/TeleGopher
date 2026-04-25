@@ -2,174 +2,93 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
-
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
+	"gorm.io/gorm"
 )
 
 type PrivateRepository interface {
-	GetPrivateById(ctx context.Context, id int64) (*domain.Private, error)
-	GetPrivateByUsers(ctx context.Context, user1Id, user2Id int64) (*domain.Private, error)
-	GetPrivateForUser(ctx context.Context, userId int64) ([]domain.Private, error)
-	CreatePrivate(ctx context.Context, user1Id, user2Id int64) (*domain.Private, error)
-	WithTx(tx *sql.Tx) PrivateRepository
+	CreatePrivate(ctx context.Context, private *domain.Private) error
+	GetPrivateById(ctx context.Context, id uint) (*domain.Private, error)
+	GetPrivateByUsers(ctx context.Context, user1Id, user2Id uint) (*domain.Private, error)
+	GetPrivatesForUser(ctx context.Context, userId uint) ([]domain.Private, error)
+	CheckPrivateExists(ctx context.Context, user1Id, user2Id uint) (bool, error)
 }
 
 type privateRepository struct {
-	dbWrite *sql.DB
-	dbRead  *sql.DB
-	tx      *sql.Tx
+	dbWrite *gorm.DB
+	dbRead  *gorm.DB
 }
 
-func (p *privateRepository) CreatePrivate(ctx context.Context, user1Id, user2Id int64) (*domain.Private, error) {
-	if user1Id == user2Id {
-		return nil, ErrSameUser
+func (p *privateRepository) CreatePrivate(ctx context.Context, private *domain.Private) error {
+	if private.User1Id > private.User2Id {
+		private.User1Id, private.User2Id = private.User2Id, private.User1Id
 	}
+	return p.dbWrite.WithContext(ctx).Create(&private).Error
+}
+
+func (p *privateRepository) GetPrivateById(ctx context.Context, id uint) (*domain.Private, error) {
+	var private domain.Private
+
+	if err := p.dbRead.WithContext(ctx).
+		Preload("User1").
+		Preload("User2").
+		First(&private, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &private, nil
+}
+
+func (p *privateRepository) GetPrivateByUsers(ctx context.Context, user1Id, user2Id uint) (*domain.Private, error) {
+	var private domain.Private
 
 	if user1Id > user2Id {
 		user1Id, user2Id = user2Id, user1Id
 	}
 
-	_, err := p.GetPrivateByUsers(ctx, user1Id, user2Id)
-	if err == nil {
-		return nil, ErrPrivateAlreadyExists
-	}
-	if !errors.Is(err, ErrRecordNotFound) {
-		return nil, fmt.Errorf("failed to check for existing private conversation: %w", err)
-	}
-
-	priv := &domain.Private{}
-
-	query := `
-        INSERT INTO privates (user1_id, user2_id)
-        VALUES ($1, $2)
-        RETURNING id, user1_id, user2_id, created_at, version
-    `
-
-	err = querier(p.dbWrite, p.tx).QueryRowContext(ctx, query, user1Id, user2Id).
-		Scan(
-			&priv.Id,
-			&priv.User1Id,
-			&priv.User2Id,
-			&priv.CreatedAt,
-			&priv.Version,
-		)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create private conversation: %w", err)
-	}
-
-	return priv, nil
-}
-
-func (p *privateRepository) GetPrivateById(ctx context.Context, id int64) (*domain.Private, error) {
-	var pvt domain.Private
-
-	query := `
-		SELECT id, user1_id, user2_id, created_at, version 
-		FROM privates 
-		WHERE id = $1
-	`
-
-	err := querier(p.dbRead, p.tx).QueryRowContext(ctx, query, id).
-		Scan(
-			&pvt.Id,
-			&pvt.User1Id,
-			&pvt.User2Id,
-			&pvt.CreatedAt,
-			&pvt.Version,
-		)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	if err := p.dbRead.WithContext(ctx).Where("user1_id = ? AND user2_id = ?", user1Id, user2Id).First(&private).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("failed to get private by id: %w", err)
+		return nil, err
 	}
-
-	return &pvt, nil
+	return &private, nil
 }
 
-func (p *privateRepository) GetPrivateByUsers(ctx context.Context, user1Id, user2Id int64) (*domain.Private, error) {
-	var pvt domain.Private
+func (p *privateRepository) GetPrivatesForUser(ctx context.Context, userId uint) ([]domain.Private, error) {
+	var privates []domain.Private
 
-	// Same canonical order as in Create
-	if user1Id > user2Id {
-		user1Id, user2Id = user2Id, user1Id
+	if err := p.dbRead.WithContext(ctx).
+		Where("user1_id = ? OR user2_id = ?", userId, userId).
+		Order("created_at DESC").
+		Find(&privates).Error; err != nil {
+		return nil, err
 	}
-
-	query := `
-		SELECT id, user1_id, user2_id, created_at, version 
-		FROM privates 
-		WHERE user1_id = $1 AND user2_id = $2
-	`
-
-	err := querier(p.dbRead, p.tx).QueryRowContext(ctx, query, user1Id, user2Id).
-		Scan(
-			&pvt.Id,
-			&pvt.User1Id,
-			&pvt.User2Id,
-			&pvt.CreatedAt,
-			&pvt.Version,
-		)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		}
-		return nil, fmt.Errorf("failed to get private by users: %w", err)
-	}
-
-	return &pvt, nil
-}
-
-func (p *privateRepository) GetPrivateForUser(ctx context.Context, userId int64) ([]domain.Private, error) {
-	query := `
-		SELECT id, user1_id, user2_id, created_at, version 
-		FROM privates 
-		WHERE user1_id = $1 OR user2_id = $1
-		ORDER BY created_at DESC
-	`
-
-	rows, err := querier(p.dbRead, p.tx).QueryContext(ctx, query, userId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query private conversations for user: %w", err)
-	}
-	defer rows.Close()
-
-	privates := make([]domain.Private, 0, 8) // initial capacity hint
-
-	for rows.Next() {
-		var pvt domain.Private
-		if err := rows.Scan(
-			&pvt.Id,
-			&pvt.User1Id,
-			&pvt.User2Id,
-			&pvt.CreatedAt,
-			&pvt.Version,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan private conversation: %w", err)
-		}
-		privates = append(privates, pvt)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating private conversations: %w", err)
-	}
-
 	return privates, nil
 }
 
-func (p *privateRepository) WithTx(tx *sql.Tx) PrivateRepository {
-	return &privateRepository{
-		dbWrite: p.dbWrite,
-		dbRead:  p.dbRead,
-		tx:      tx,
+func (p *privateRepository) CheckPrivateExists(ctx context.Context, user1Id, user2Id uint) (bool, error) {
+	var count int64
+
+	// Ensure canonical ordering
+	if user1Id > user2Id {
+		user1Id, user2Id = user2Id, user1Id
 	}
+
+	if err := p.dbRead.WithContext(ctx).
+		Model(&domain.Private{}).
+		Where("user1_id = ? AND user2_id = ?", user1Id, user2Id).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
 
-func NewPrivateRepository(dbWrite, dbRead *sql.DB) PrivateRepository {
+func NewPrivateRepository(dbWrite, dbRead *gorm.DB) PrivateRepository {
 	return &privateRepository{
 		dbWrite: dbWrite,
 		dbRead:  dbRead,
