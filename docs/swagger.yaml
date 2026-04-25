@@ -1,0 +1,1024 @@
+basePath: /v1
+definitions:
+  dto.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.RegisterResponse'
+    type: object
+  dto.MessageListResponse:
+    properties:
+      has_next_page:
+        type: boolean
+      limit:
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/dto.MessageResponse'
+        type: array
+      page:
+        type: integer
+    type: object
+  dto.MessageRequest:
+    properties:
+      content:
+        type: string
+      message_type:
+        type: string
+      private_id:
+        type: integer
+    type: object
+  dto.MessageResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      delivered:
+        type: boolean
+      from_id:
+        type: integer
+      id:
+        type: integer
+      message_type:
+        type: string
+      private_id:
+        type: integer
+      read:
+        type: boolean
+    type: object
+  dto.PrivateRequest:
+    properties:
+      receiver_id:
+        type: integer
+    type: object
+  dto.PrivateResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      user1_id:
+        type: integer
+      user2_id:
+        type: integer
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  dto.RefreshTokenResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.RegisterResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  helper.Response:
+    properties:
+      data: {}
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:4000
+info:
+  contact:
+    email: no-email@no-email
+    name: Saleh Ghazimoradi
+    url: http://github.com/saleh-ghazimoradi
+  description: A fully-purposed chat application using Golang, Websocket, and etc
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Telegopher API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: User login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LoginResponse'
+              type: object
+        "400":
+          description: Invalid platform or request data
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      summary: User login
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidate refresh token and logout user
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "400":
+          description: Invalid platform
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - Authentication
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Get the currently authenticated user's information
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User successfully fetched
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserResponse'
+              type: object
+        "400":
+          description: Invalid platform
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized - Invalid or missing token
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get current authenticated user
+      tags:
+      - Authentication
+  /auth/refresh-token:
+    post:
+      consumes:
+      - application/json
+      description: Get a new access token using refresh token
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.RefreshTokenResponse'
+              type: object
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Invalid refresh token
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with email and password
+      parameters:
+      - description: User registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User successfully created
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.RegisterResponse'
+              type: object
+        "400":
+          description: Invalid request data or user already exists
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      summary: Signup a new user
+      tags:
+      - Authentication
+  /conversations:
+    get:
+      consumes:
+      - application/json
+      description: Get all private conversations for the authenticated user
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Conversations successfully retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.PrivateResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get user's private conversations
+      tags:
+      - Private Conversations
+  /conversations/privates:
+    post:
+      consumes:
+      - application/json
+      description: Create a new private conversation between the authenticated user
+        and another user
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Receiver user ID
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PrivateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Private conversation successfully created
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PrivateResponse'
+              type: object
+        "400":
+          description: Invalid request data or trying to create conversation with
+            yourself
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "409":
+          description: Private conversation already exists
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Create a private conversation
+      tags:
+      - Private Conversations
+  /conversations/privates/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a specific private conversation by its ID (user must be a participant)
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Private conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Private conversation successfully retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.PrivateResponse'
+              type: object
+        "400":
+          description: Invalid private conversation ID
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User doesn't have access to this conversation
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Private conversation not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get private conversation by ID
+      tags:
+      - Private Conversations
+  /conversations/privates/{id}/messages:
+    get:
+      consumes:
+      - application/json
+      description: Get all messages from a specific private conversation with pagination
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Private conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Private messages successfully fetched
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MessageListResponse'
+              type: object
+        "400":
+          description: Invalid conversation ID or pagination parameters
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to view this conversation
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Private conversation not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get private conversation messages
+      tags:
+      - Messages
+  /conversations/privates/{id}/messages/undelivered:
+    get:
+      consumes:
+      - application/json
+      description: Get all undelivered messages from a specific private conversation
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Private conversation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Undelivered messages successfully fetched
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.MessageResponse'
+                  type: array
+              type: object
+        "400":
+          description: Invalid conversation ID
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to view this conversation
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get undelivered messages
+      tags:
+      - Messages
+  /files/:
+    get:
+      description: Retrieve and serve an uploaded file
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: file
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to access this file
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: File not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Serve a file
+      tags:
+      - Files
+  /files/{id}:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file to a specific chat conversation. Supports images,
+        documents, and other file types up to 50MB.
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Chat conversation ID (private conversation ID)
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: File to upload (max 50MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File URL returned in data field
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  type: string
+              type: object
+        "400":
+          description: Invalid conversation ID or missing file
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to upload to this conversation
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "413":
+          description: File too large (max 50MB)
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Upload a file
+      tags:
+      - Files
+  /healthcheck:
+    get:
+      description: Check if the server is running and get system information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Server is running
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /messages:
+    post:
+      consumes:
+      - application/json
+      description: Send a new message in a private conversation
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Message details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MessageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Message successfully created
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MessageResponse'
+              type: object
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Private conversation not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Send a new message
+      tags:
+      - Messages
+  /messages/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a specific message by ID
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Message successfully retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MessageResponse'
+              type: object
+        "400":
+          description: Invalid message ID
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to view this message
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Message not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get a specific message
+      tags:
+      - Messages
+  /messages/{id}/delivered:
+    patch:
+      consumes:
+      - application/json
+      description: Mark a specific message as delivered to the recipient
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Message successfully marked as delivered
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "400":
+          description: Invalid message ID
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to mark this message as delivered
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Message not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Mark message as delivered
+      tags:
+      - Messages
+  /messages/{id}/read:
+    patch:
+      consumes:
+      - application/json
+      description: Mark a specific message as read by the recipient
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: Message ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Message successfully marked as read
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "400":
+          description: Invalid message ID
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "403":
+          description: Forbidden - User not authorized to mark this message as read
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: Message not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Mark message as read
+      tags:
+      - Messages
+  /users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a user's information by their ID. User must be authenticated.
+      parameters:
+      - description: Platform type (web or mobile)
+        enum:
+        - web
+        - mobile
+        in: header
+        name: X-Platform
+        required: true
+        type: string
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User successfully retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/helper.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserResponse'
+              type: object
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/helper.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/helper.Response'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - Users
+securityDefinitions:
+  BearerAuth:
+    description: JWT Bearer token (e.g., "Bearer {token}")
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
