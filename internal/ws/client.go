@@ -3,6 +3,7 @@ package ws
 import (
 	"github.com/coder/websocket"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
+	"log"
 	"sync"
 )
 
@@ -23,7 +24,9 @@ func (c *Client) SendEvent(event Event) {
 func (c *Client) Close() {
 	c.once.Do(func() {
 		if c.Conn != nil {
-			_ = c.Conn.Close(websocket.StatusNormalClosure, "Closing connection")
+			if err := c.Conn.Close(websocket.StatusNormalClosure, "Closing connection"); err != nil {
+				log.Println("failed to close connection")
+			}
 		}
 		close(c.Send)
 	})

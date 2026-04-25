@@ -3,26 +3,78 @@ package ws
 import (
 	"context"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
-	"log"
+	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"sync"
 )
 
 type Hub struct {
+	Clients        map[uint]map[*Client]struct{}
 	privateService service.PrivateService
 	messageService service.MessageService
-	clients        map[int64]map[*Client]struct{}
+	logger         utils.LoggerStrategy
 	mu             sync.RWMutex
+}
+
+func (h *Hub) BroadcastToAll(event Event) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	for _, conn := range h.Clients {
+		for client := range conn {
+			select {
+			case client.Send <- event:
+			default:
+				h.logger.Warn("dropped event for client", "client", client.User.Id, "channel full")
+			}
+		}
+	}
+}
+
+func (h *Hub) GetClients(userId uint) ([]*Client, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	connections, ok := h.Clients[userId]
+	if !ok || len(connections) == 0 {
+		return nil, false
+	}
+
+	clients := make([]*Client, 0, len(connections))
+	for c := range connections {
+		clients = append(clients, c)
+	}
+
+	return clients, true
+}
+
+func (h *Hub) SendEventToUserIds(userIds []uint, senderId uint, eventType EventType, payload map[string]any) {
+	for _, id := range userIds {
+		h.mu.RLock()
+		connections, ok := h.Clients[id]
+		h.mu.RUnlock()
+		if !ok {
+			continue
+		}
+
+		for c := range connections {
+			c.SendEvent(Event{
+				EventType: eventType,
+				Payload:   payload,
+			})
+		}
+	}
 }
 
 func (h *Hub) RegisterClient(client *Client) {
 	h.mu.Lock()
-	conns, ok := h.clients[client.User.Id]
+	connections, ok := h.Clients[client.User.Id]
 	if !ok {
-		conns = make(map[*Client]struct{})
-		h.clients[client.User.Id] = conns
+		connections = make(map[*Client]struct{})
+		h.Clients[client.User.Id] = connections
 	}
-	conns[client] = struct{}{}
-	firstConnection := len(conns) == 1
+
+	connections[client] = struct{}{}
+	firstConnection := len(connections) == 1
 	h.mu.Unlock()
 
 	if firstConnection {
@@ -33,23 +85,24 @@ func (h *Hub) RegisterClient(client *Client) {
 
 		go func() {
 			ctx := context.Background()
-			privates, err := h.privateService.GetUserPrivates(ctx, client.User.Id)
+			privates, err := h.privateService.GetPrivatesForUser(ctx, client.User.Id)
 			if err != nil {
-				log.Println("failed to get privates:", err)
+				h.logger.Error("failed to get privates", "err", err)
 				return
 			}
+
 			for _, private := range privates {
-				msgs, err := h.messageService.GetUndeliveredMessages(ctx, private.Id, client.User.Id)
+				msg, err := h.messageService.GetUndeliveredMessages(ctx, private.Id, client.User.Id)
 				if err != nil {
-					log.Println("failed to get undelivered messages:", err)
+					h.logger.Error("failed to get undelivered messages", "err", err)
 					continue
 				}
-				for _, msg := range msgs {
-					if msg.FromId == client.User.Id {
+				for _, m := range msg {
+					if m.FromId == client.User.Id {
 						continue
 					}
-					h.SendEventToUserIds([]int64{msg.FromId}, client.User.Id, EventUserOnline, map[string]any{
-						"message_id": msg.Id,
+					h.SendEventToUserIds([]uint{m.FromId}, client.User.Id, EventUserOnline, map[string]any{
+						"message_id": m.Id,
 						"to_id":      client.User.Id,
 					})
 				}
@@ -58,48 +111,18 @@ func (h *Hub) RegisterClient(client *Client) {
 	}
 }
 
-func (h *Hub) SendCurrentClients(client *Client) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	users := make([]map[string]any, 0)
-	seen := make(map[int64]struct{})
-
-	for userId, conns := range h.clients {
-		if userId == client.User.Id {
-			continue
-		}
-
-		_, ok := seen[userId]
-		if ok {
-			continue
-		}
-
-		for c := range conns {
-			users = append(users, c.User.ToMap())
-			seen[userId] = struct{}{}
-			break
-		}
-	}
-
-	client.Send <- Event{
-		EventType: EventCurrentUsers,
-		Payload:   users,
-	}
-}
-
 func (h *Hub) UnregisterClient(client *Client) {
 	h.mu.Lock()
-	conns, ok := h.clients[client.User.Id]
+	connections, ok := h.Clients[client.User.Id]
 	if !ok {
 		h.mu.Unlock()
 		return
 	}
 
-	delete(conns, client)
-	noConnectionLeft := len(conns) == 0
+	delete(connections, client)
+	noConnectionLeft := len(connections) == 0
 	if noConnectionLeft {
-		delete(h.clients, client.User.Id)
+		delete(h.Clients, client.User.Id)
 	}
 
 	h.mu.Unlock()
@@ -112,60 +135,42 @@ func (h *Hub) UnregisterClient(client *Client) {
 	}
 }
 
-func (h *Hub) GetClients(userId int64) ([]*Client, bool) {
+func (h *Hub) SendCurrentClients(client *Client) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	conns, ok := h.clients[userId]
-	if !ok || len(conns) == 0 {
-		return nil, false
-	}
+	users := make([]map[string]any, 0)
+	seen := make(map[uint]struct{})
 
-	clients := make([]*Client, 0, len(conns))
-	for conn := range conns {
-		clients = append(clients, conn)
-	}
-
-	return clients, true
-}
-
-func (h *Hub) SendEventToUserIds(userIds []int64, senderId int64, event EventType, payload map[string]any) {
-	for _, userId := range userIds {
-		h.mu.RLock()
-		conns, ok := h.clients[userId]
-		h.mu.RUnlock()
-		if !ok {
+	for userId, connections := range h.Clients {
+		if userId == client.User.Id {
 			continue
 		}
 
-		for conn := range conns {
-			conn.SendEvent(Event{
-				EventType: event,
-				Payload:   payload,
-			})
+		_, ok := seen[userId]
+		if ok {
+			continue
 		}
+
+		for connection := range connections {
+			users = append(users, connection.User.ToMap())
+			seen[userId] = struct{}{}
+			break
+		}
+	}
+
+	client.Send <- Event{
+		EventType: EventCurrentUsers,
+		Payload:   users,
 	}
 }
 
-func (h *Hub) BroadcastToAll(event Event) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, client := range h.clients {
-		for c := range client {
-			select {
-			case c.Send <- event:
-			default:
-				log.Printf("warning: dropped event for client %d, channel full", c.User.Id)
-			}
-		}
-	}
-}
-
-func (h *Hub) SendError(clientId int64, message string) {
+func (h *Hub) SendError(clientId uint, message string) {
 	clients, ok := h.GetClients(clientId)
-	if !ok || len(clients) == 0 {
+	if !ok || len(message) == 0 {
 		return
 	}
+
 	for _, client := range clients {
 		client.SendEvent(Event{
 			EventType: EventError,
@@ -178,10 +183,10 @@ func (h *Hub) Shutdown() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	log.Println("shutting down Hub, notifying all clients...")
+	h.logger.Info("Shutting down hub, notifying all clients...")
 
-	for _, conns := range h.clients {
-		for client := range conns {
+	for _, connections := range h.Clients {
+		for client := range connections {
 			client.SendEvent(Event{
 				EventType: EventServerShutdown,
 				Payload:   "Server is shutting down",
@@ -189,14 +194,15 @@ func (h *Hub) Shutdown() {
 			client.Close()
 		}
 	}
-	h.clients = make(map[int64]map[*Client]struct{})
-	log.Println("Hub shutdown complete")
+	h.Clients = make(map[uint]map[*Client]struct{})
+	h.logger.Info("Hub shutdown complete")
 }
 
-func NewHub(messageService service.MessageService, privateService service.PrivateService) *Hub {
+func NewHub(privateService service.PrivateService, messageService service.MessageService, logger utils.LoggerStrategy) *Hub {
 	return &Hub{
-		messageService: messageService,
+		Clients:        make(map[uint]map[*Client]struct{}),
 		privateService: privateService,
-		clients:        make(map[int64]map[*Client]struct{}),
+		messageService: messageService,
+		logger:         logger,
 	}
 }
