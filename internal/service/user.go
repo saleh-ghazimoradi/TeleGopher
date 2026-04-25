@@ -3,32 +3,30 @@ package service
 import (
 	"context"
 	"fmt"
-	infra "github.com/saleh-ghazimoradi/TeleGopher/infra/TXManager"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/dto"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
 )
 
 type UserService interface {
-	GetUserById(ctx context.Context, userId int64) (*dto.RegisterResponse, error)
+	GetUserById(ctx context.Context, id uint) (*dto.UserResponse, error)
 }
 
 type userService struct {
 	userRepository repository.UserRepository
-	tx             infra.TxManager
 }
 
-func (u *userService) GetUserById(ctx context.Context, userId int64) (*dto.RegisterResponse, error) {
-	user, err := u.userRepository.GetUserById(ctx, userId)
+func (u *userService) GetUserById(ctx context.Context, id uint) (*dto.UserResponse, error) {
+	user, err := u.userRepository.GetUserById(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	return u.toRegisterResponse(user), nil
+	return u.toUserResponse(user), nil
 }
 
-func (u *userService) toRegisterResponse(user *domain.User) *dto.RegisterResponse {
-	return &dto.RegisterResponse{
+func (u *userService) toUserResponse(user *domain.User) *dto.UserResponse {
+	return &dto.UserResponse{
 		Id:        user.Id,
 		Name:      user.Name,
 		Email:     user.Email,
@@ -36,9 +34,8 @@ func (u *userService) toRegisterResponse(user *domain.User) *dto.RegisterRespons
 	}
 }
 
-func NewUserService(repository repository.UserRepository, tx infra.TxManager) UserService {
+func NewUserService(userRepository repository.UserRepository) UserService {
 	return &userService{
-		userRepository: repository,
-		tx:             tx,
+		userRepository: userRepository,
 	}
 }
