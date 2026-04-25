@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/ws"
+	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"log"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,8 +22,8 @@ type Server struct {
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
 	ErrLog       *log.Logger
-	Logger       *slog.Logger
-	hub          *ws.Hub
+	Logger       utils.LoggerStrategy
+	Hub          *ws.Hub
 }
 
 type Options func(*Server)
@@ -40,9 +40,9 @@ func WithPort(port string) Options {
 	}
 }
 
-func WithHandler(h http.Handler) Options {
+func WithHandler(handler http.Handler) Options {
 	return func(s *Server) {
-		s.Handler = h
+		s.Handler = handler
 	}
 }
 
@@ -64,21 +64,21 @@ func WithIdleTimeout(timeout time.Duration) Options {
 	}
 }
 
-func WithHub(hub *ws.Hub) Options {
-	return func(s *Server) {
-		s.hub = hub
-	}
-}
-
 func WithErrLog(logger *log.Logger) Options {
 	return func(s *Server) {
 		s.ErrLog = logger
 	}
 }
 
-func WithLogger(logger *slog.Logger) Options {
-	return func(server *Server) {
-		server.Logger = logger
+func WithLogger(logger utils.LoggerStrategy) Options {
+	return func(s *Server) {
+		s.Logger = logger
+	}
+}
+
+func WithHub(hub *ws.Hub) Options {
+	return func(s *Server) {
+		s.Hub = hub
 	}
 }
 
@@ -113,7 +113,7 @@ func (s *Server) Connect() error {
 			shutdownError <- err
 		}
 
-		s.hub.Shutdown()
+		s.Hub.Shutdown()
 
 		s.Logger.Info("completing background tasks", "addr", server.Addr)
 		shutdownError <- nil
