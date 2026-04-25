@@ -6,30 +6,30 @@ type ContextKey string
 
 const (
 	UserIdKey   ContextKey = "user_id"
-	UserNameKey ContextKey = "user_name"
+	NameKey     ContextKey = "name"
 	PlatformKey ContextKey = "X-Platform"
 )
 
-func WithUserId(ctx context.Context, id int64) context.Context {
+func WithUserId(ctx context.Context, id uint) context.Context {
 	return context.WithValue(ctx, UserIdKey, id)
 }
 
-func WithIdFromContext(ctx context.Context) (int64, bool) {
-	id, ok := ctx.Value(UserIdKey).(int64)
-	return id, ok
-}
-
-func WithUserName(ctx context.Context, name string) context.Context {
-	return context.WithValue(ctx, UserNameKey, name)
-}
-
-func UserNameFromContext(ctx context.Context) (string, bool) {
-	name, ok := ctx.Value(UserNameKey).(string)
-	return name, ok
+func WithName(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, NameKey, name)
 }
 
 func WithPlatform(ctx context.Context, platform string) context.Context {
 	return context.WithValue(ctx, PlatformKey, platform)
+}
+
+func UserIdFromContext(ctx context.Context) (uint, bool) {
+	id, ok := ctx.Value(UserIdKey).(uint)
+	return id, ok
+}
+
+func NameFromContext(ctx context.Context) (string, bool) {
+	name, ok := ctx.Value(NameKey).(string)
+	return name, ok
 }
 
 func PlatformFromContext(ctx context.Context) (string, bool) {
