@@ -1,18 +1,21 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
 
 type User struct {
-	Id                   int64
-	Name                 string
-	Email                string
-	Password             string
+	Id                   uint   `gorm:"primaryKey"`
+	Name                 string `gorm:"not null"`
+	Email                string `gorm:"uniqueIndex;not null"`
+	Password             string `gorm:"not null"`
 	RefreshTokenWeb      *string
 	RefreshTokenWebAt    *time.Time
 	RefreshTokenMobile   *string
 	RefreshTokenMobileAt *time.Time
+	Version              uint `gorm:"default:1;not null"`
 	CreatedAt            time.Time
-	Version              int
+	UpdatedAt            time.Time
 }
 
 func (u *User) ToMap() map[string]any {

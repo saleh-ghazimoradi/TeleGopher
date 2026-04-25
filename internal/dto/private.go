@@ -1,12 +1,14 @@
 package dto
 
-import (
-	"time"
-)
+import "time"
+
+type PrivateRequest struct {
+	ReceiverId uint `json:"receiver_id"`
+}
 
 type PrivateResponse struct {
-	Id        int64     `json:"id"`
-	User1Id   int64     `json:"user1_id"`
-	User2Id   int64     `json:"user2_id"`
+	Id        uint      `json:"id"`
+	User1Id   uint      `json:"user1_id"`
+	User2Id   uint      `json:"user2_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
