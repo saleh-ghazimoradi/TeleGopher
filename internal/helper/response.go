@@ -1,78 +1,103 @@
 package helper
 
-import (
-	"fmt"
-	"log/slog"
-	"net/http"
-)
+import "net/http"
 
-type ErrResponse struct {
-	logger *slog.Logger
+type Response struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data"`
+	Error   string `json:"error"`
 }
 
-func (e *ErrResponse) LogError(r *http.Request, err error) {
-	var (
-		method = r.Method
-		uri    = r.URL.RequestURI()
-	)
-
-	e.logger.Error(err.Error(), "method", method, "uri", uri)
+type PaginatedMeta struct {
+	Page      int64 `json:"page"`
+	Limit     int64 `json:"limit"`
+	Total     int64 `json:"total"`
+	TotalPage int64 `json:"total_page"`
 }
 
-func (e *ErrResponse) ErrorResponse(w http.ResponseWriter, r *http.Request, status int, message any) {
-	env := Envelope{"error": message}
+type PaginatedResponse struct {
+	Response Response
+	Meta     PaginatedMeta `json:"meta"`
+}
 
-	if err := WriteJSON(w, status, env, nil); err != nil {
-		e.LogError(r, err)
-		w.WriteHeader(http.StatusInternalServerError)
+func SuccessResponse(w http.ResponseWriter, message string, data any) {
+	response := Response{
+		Success: true,
+		Message: message,
+		Data:    data,
 	}
+	writeJSON(w, http.StatusOK, response)
 }
 
-func (e *ErrResponse) ServerErrorResponse(w http.ResponseWriter, r *http.Request, err error) {
-	e.LogError(r, err)
-	message := "the server encountered a problem and could not process your request"
-	e.ErrorResponse(w, r, http.StatusInternalServerError, message)
+func CreatedResponse(w http.ResponseWriter, message string, data any) {
+	response := Response{
+		Success: true,
+		Message: message,
+		Data:    data,
+	}
+	writeJSON(w, http.StatusCreated, response)
 }
 
-func (e *ErrResponse) NotFoundResponse(w http.ResponseWriter, r *http.Request) {
-	message := "the requested resource could not be found"
-	e.ErrorResponse(w, r, http.StatusNotFound, message)
+func ErrorResponse(w http.ResponseWriter, statusCode int, message string, err error) {
+	response := Response{
+		Success: false,
+		Message: message,
+	}
+	if err != nil {
+		response.Error = err.Error()
+	}
+	writeJSON(w, statusCode, response)
 }
 
-func (e *ErrResponse) MethodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
-	message := fmt.Sprintf("the %s method is not supported for this resource", r.Method)
-	e.ErrorResponse(w, r, http.StatusMethodNotAllowed, message)
+func BadRequestResponse(w http.ResponseWriter, message string, err error) {
+	ErrorResponse(w, http.StatusBadRequest, message, err)
 }
 
-func (e *ErrResponse) BadRequestResponse(w http.ResponseWriter, r *http.Request, err error) {
-	e.ErrorResponse(w, r, http.StatusBadRequest, err.Error())
+func UnauthorizedResponse(w http.ResponseWriter, message string) {
+	ErrorResponse(w, http.StatusUnauthorized, message, nil)
 }
 
-func (e *ErrResponse) FailedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
-	e.ErrorResponse(w, r, http.StatusUnprocessableEntity, errors)
+func ForbiddenResponse(w http.ResponseWriter, message string) {
+	ErrorResponse(w, http.StatusForbidden, message, nil)
 }
 
-func (e *ErrResponse) EditConflictResponse(w http.ResponseWriter, r *http.Request) {
-	message := "unable to update the record due to an edit conflict, please try again"
-	e.ErrorResponse(w, r, http.StatusConflict, message)
+func NotFoundResponse(w http.ResponseWriter, message string) {
+	ErrorResponse(w, http.StatusNotFound, message, nil)
 }
 
-func (e *ErrResponse) RateLimitExceededResponse(w http.ResponseWriter, r *http.Request) {
-	message := "rate limit exceeded, please try again"
-	e.ErrorResponse(w, r, http.StatusTooManyRequests, message)
+func InternalServerError(w http.ResponseWriter, message string, err error) {
+	ErrorResponse(w, http.StatusInternalServerError, message, err)
 }
 
-func (e *ErrResponse) InvalidCredentialsResponse(w http.ResponseWriter, r *http.Request) {
-	message := "invalid authentication credentials"
-	e.ErrorResponse(w, r, http.StatusUnauthorized, message)
+func FailedValidationResponse(w http.ResponseWriter, message string) {
+	ErrorResponse(w, http.StatusUnprocessableEntity, message, nil)
 }
 
-func (e *ErrResponse) InvalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("WWW-Authenticate", "Bearer")
-	message := "invalid or missing authentication token"
-	e.ErrorResponse(w, r, http.StatusUnauthorized, message)
+func EditConflictResponse(w http.ResponseWriter, message string, err error) {
+	ErrorResponse(w, http.StatusConflict, message, err)
 }
 
-func NewErrResponse(logger *slog.Logger) *ErrResponse {
-	return &ErrResponse{logger: logger}
+func RateLimitExceededResponse(w http.ResponseWriter, message string) {
+	ErrorResponse(w, http.StatusTooManyRequests, message, nil)
+}
+
+func HTTPRouterNotFoundResponse(w http.ResponseWriter, r *http.Request) {
+	ErrorResponse(w, http.StatusNotFound, "Not found", nil)
+}
+
+func HTTPRouterMethodNotAllowedResponse(w http.ResponseWriter, r *http.Request) {
+	ErrorResponse(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+}
+
+func PaginatedSuccessResponse(w http.ResponseWriter, message string, data any, meta PaginatedMeta) {
+	paginatedResponse := PaginatedResponse{
+		Response: Response{
+			Success: true,
+			Message: message,
+			Data:    data,
+		},
+		Meta: meta,
+	}
+	writeJSON(w, http.StatusOK, paginatedResponse)
 }
