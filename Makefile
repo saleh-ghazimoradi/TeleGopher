@@ -10,9 +10,6 @@ migrate-up:
 migrate-down:
 	go run . migrateDown
 
-migrate-rollback:
-	go run . migrateRollback
-
 fmt:
 	go fmt ./...
 
@@ -22,3 +19,6 @@ vet:
 run: fmt vet
 	go run . run
 
+generate_doc:
+	mkdir -p docs
+	swag init -g main.go -o docs --parseDependency --parseInternal --exclude .git,docker-compose.yml,infra
