@@ -7,16 +7,40 @@ import (
 )
 
 var (
-	instance *Config
-	once     sync.Once
-	initErr  error
+	cfg     *Config
+	once    sync.Once
+	initErr error
 )
 
 type Config struct {
-	Server      Server
-	Postgresql  Postgresql
 	Application Application
 	JWT         JWT
+	Postgresql  Postgresql
+	Server      Server
+}
+
+type Application struct {
+	Version     string `env:"APP_VERSION"`
+	Environment string `env:"APP_ENVIRONMENT"`
+}
+
+type Postgresql struct {
+	Host        string        `env:"POSTGRES_HOST"`
+	Port        string        `env:"POSTGRES_PORT"`
+	User        string        `env:"POSTGRES_USER"`
+	Password    string        `env:"POSTGRES_PASSWORD"`
+	Name        string        `env:"POSTGRES_NAME"`
+	MaxOpenConn int           `env:"POSTGRES_MAX_OPEN_CONN"`
+	MaxIdleConn int           `env:"POSTGRES_MAX_IDLE_CONN"`
+	MaxIdleTime time.Duration `env:"POSTGRES_MAX_IDLE_TIME"`
+	SSLMode     string        `env:"POSTGRES_SSL_MODE"`
+	Timeout     time.Duration `env:"POSTGRES_TIMEOUT"`
+}
+
+type JWT struct {
+	Secret              string        `env:"JWT_SECRET"`
+	ExpiresIn           time.Duration `env:"JWT_EXPIRES_IN"`
+	RefreshTokenExpires time.Duration `env:"JWT_REFRESH_TOKEN_EXPIRES"`
 }
 
 type Server struct {
@@ -27,38 +51,13 @@ type Server struct {
 	WriteTimeout time.Duration `env:"SERVER_WRITE_TIMEOUT"`
 }
 
-type Postgresql struct {
-	Host              string        `env:"POSTGRES_HOST"`
-	Port              string        `env:"POSTGRES_PORT"`
-	User              string        `env:"POSTGRES_USER"`
-	Password          string        `env:"POSTGRES_PASSWORD"`
-	Name              string        `env:"POSTGRES_NAME"`
-	TimeZone          string        `env:"POSTGRES_TIMEZONE"`
-	MaxOpenConn       int           `env:"POSTGRES_MAX_OPEN_CONN"`
-	MaxIdleConn       int           `env:"POSTGRES_MAX_IDLE_CONN"`
-	MaxIdleTime       time.Duration `env:"POSTGRES_MAX_IDLE_TIME"`
-	MaxLifetime       time.Duration `env:"POSTGRES_MAX_LIFETIME"`
-	SSLMode           string        `env:"POSTGRES_SSL_MODE"`
-	ConnectionTimeout time.Duration `env:"POSTGRES_CONNECTION_TIMEOUT"`
-}
-
-type Application struct {
-	Version     string `env:"VERSION"`
-	Environment string `env:"ENVIRONMENT"`
-}
-
-type JWT struct {
-	Secret string        `env:"JWT_SECRET"`
-	Expire time.Duration `env:"JWT_EXPIRE"`
-}
-
-func GetConfigInstance() (*Config, error) {
+func GetCfg() (*Config, error) {
 	once.Do(func() {
-		instance = &Config{}
-		initErr = env.Parse(instance)
+		cfg = &Config{}
+		initErr = env.Parse(cfg)
 		if initErr != nil {
-			instance = nil
+			cfg = nil
 		}
 	})
-	return instance, initErr
+	return cfg, initErr
 }
