@@ -103,7 +103,6 @@ func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 // @Failure      500 {object} helper.Response "Internal server error"
 // @Router       /auth/logout [post]
 func (a *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	userid, ok := utils.UserIdFromContext()
 	userId, ok := utils.UserIdFromContext(r.Context())
 	if !ok {
 		helper.UnauthorizedResponse(w, "Unauthorized")
