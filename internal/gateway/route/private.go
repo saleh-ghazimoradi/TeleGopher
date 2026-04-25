@@ -7,24 +7,19 @@ import (
 )
 
 type PrivateRoute struct {
-	privateHandler *handler.PrivateHandler
 	middleware     *middleware.Middleware
+	privateHandler *handler.PrivateHandler
 }
 
 func (p *PrivateRoute) PrivateRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/conversations/privates",
-		p.middleware.Authenticate(p.privateHandler.CreatePrivate))
-
-	mux.HandleFunc("GET /v1/conversations/privates/{private_id}",
-		p.middleware.Authenticate(p.privateHandler.GetPrivate))
-
-	mux.HandleFunc("GET /v1/conversations",
-		p.middleware.Authenticate(p.privateHandler.GetConversations))
+	mux.Handle("POST /v1/conversations/privates", p.middleware.WrapAuth(p.privateHandler.CreatePrivate))
+	mux.Handle("GET /v1/conversations/privates/{id}", p.middleware.WrapAuth(p.privateHandler.GetPrivateById))
+	mux.Handle("GET /v1/conversations", p.middleware.WrapAuth(p.privateHandler.GetConversations))
 }
 
-func NewPrivateRoute(privateHandler *handler.PrivateHandler, middleware *middleware.Middleware) *PrivateRoute {
+func NewPrivateRoute(middleware *middleware.Middleware, privateHandler *handler.PrivateHandler) *PrivateRoute {
 	return &PrivateRoute{
-		privateHandler: privateHandler,
 		middleware:     middleware,
+		privateHandler: privateHandler,
 	}
 }

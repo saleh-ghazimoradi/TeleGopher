@@ -6,13 +6,16 @@ import (
 )
 
 type HealthCheckRoute struct {
-	healthHandler *handler.HealthCheckHandler
+	healthCheckHandler *handler.HealthCheckHandler
 }
 
-func (h *HealthCheckRoute) Healthcheck(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/healthcheck", h.healthHandler.HealthCheck)
+func (h *HealthCheckRoute) HealthCheck(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/healthcheck", h.healthCheckHandler.HealthCheck)
+	mux.HandleFunc("GET /v1/ws-healthcheck", h.healthCheckHandler.WsHealthCheck)
 }
 
-func NewHealthCheckRoute(healthHandler *handler.HealthCheckHandler) *HealthCheckRoute {
-	return &HealthCheckRoute{healthHandler: healthHandler}
+func NewHealthCheckRoute(healthCheckHandler *handler.HealthCheckHandler) *HealthCheckRoute {
+	return &HealthCheckRoute{
+		healthCheckHandler: healthCheckHandler,
+	}
 }

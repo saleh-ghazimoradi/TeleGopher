@@ -7,21 +7,18 @@ import (
 )
 
 type UploadFileRoute struct {
-	uploadFileHandler *handler.UploadFileHandler
 	middleware        *middleware.Middleware
+	uploadFileHandler *handler.UploadFileHandler
 }
 
 func (u *UploadFileRoute) UploadFileRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/files/{private_id}",
-		u.middleware.Authenticate(u.uploadFileHandler.UploadFile))
-
-	fileHandler := u.middleware.Authenticate(u.uploadFileHandler.GetFile().ServeHTTP)
-	mux.Handle("GET /v1/files/", fileHandler)
+	mux.Handle("POST /v1/files/{id}", u.middleware.WrapAuth(u.uploadFileHandler.UploadFile))
+	mux.Handle("GET /v1/files/", u.middleware.WrapAuth(u.uploadFileHandler.GetFile().ServeHTTP))
 }
 
-func NewUploadFileRoute(uploadFileHandler *handler.UploadFileHandler, middleware *middleware.Middleware) *UploadFileRoute {
+func NewUploadFileRoute(middleware *middleware.Middleware, uploadFileHandler *handler.UploadFileHandler) *UploadFileRoute {
 	return &UploadFileRoute{
-		uploadFileHandler: uploadFileHandler,
 		middleware:        middleware,
+		uploadFileHandler: uploadFileHandler,
 	}
 }

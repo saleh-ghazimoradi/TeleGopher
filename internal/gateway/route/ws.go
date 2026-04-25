@@ -6,14 +6,14 @@ import (
 )
 
 type WSRoute struct {
-	wsHandler *handler.WSHandler
+	wsHandler *handler.WebSocketHandler
 }
 
 func (ws *WSRoute) WSRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /ws", ws.wsHandler.WebSocketHandler)
+	mux.HandleFunc("GET /ws", ws.wsHandler.HandleWebsocket)
 }
 
-func NewWSRoute(wsHandler *handler.WSHandler) *WSRoute {
+func NewWSRoute(wsHandler *handler.WebSocketHandler) *WSRoute {
 	return &WSRoute{
 		wsHandler: wsHandler,
 	}

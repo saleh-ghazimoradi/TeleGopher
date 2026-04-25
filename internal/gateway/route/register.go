@@ -2,86 +2,99 @@ package route
 
 import (
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"net/http"
 )
 
-type RegisterRoutes struct {
-	healthRoute         *HealthCheckRoute
-	authenticationRoute *AuthenticationRoute
-	userRoute           *UserRoute
-	privateRoute        *PrivateRoute
-	messageRoute        *MessageRoute
-	uploadFileRoute     *UploadFileRoute
-	wsRoute             *WSRoute
-	middleware          *middleware.Middleware
+type RegisterRoute struct {
+	Middleware       *middleware.Middleware
+	HealthCheckRoute *HealthCheckRoute
+	AuthRoute        *AuthRoute
+	UserRoute        *UserRoute
+	PrivateRoute     *PrivateRoute
+	MessageRoute     *MessageRoute
+	UploadFileRoute  *UploadFileRoute
+	WsRoute          *WSRoute
 }
 
-type Options func(*RegisterRoutes)
+type Options func(*RegisterRoute)
 
-func WithHealthCheckRoute(route *HealthCheckRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.healthRoute = route
+func WithMiddleware(middleware *middleware.Middleware) Options {
+	return func(r *RegisterRoute) {
+		r.Middleware = middleware
 	}
 }
 
-func WithAuthenticationRoute(route *AuthenticationRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.authenticationRoute = route
+func WithHealthCheckRoute(route *HealthCheckRoute) Options {
+	return func(r *RegisterRoute) {
+		r.HealthCheckRoute = route
+	}
+}
+
+func WithAuthRoute(route *AuthRoute) Options {
+	return func(r *RegisterRoute) {
+		r.AuthRoute = route
 	}
 }
 
 func WithUserRoute(route *UserRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.userRoute = route
+	return func(r *RegisterRoute) {
+		r.UserRoute = route
 	}
 }
 
-func WithPrivateRoute(privateRoute *PrivateRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.privateRoute = privateRoute
+func WithPrivateRoute(route *PrivateRoute) Options {
+	return func(r *RegisterRoute) {
+		r.PrivateRoute = route
 	}
 }
 
-func WithMessageRoute(messageRoute *MessageRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.messageRoute = messageRoute
+func WithMessageRoute(route *MessageRoute) Options {
+	return func(r *RegisterRoute) {
+		r.MessageRoute = route
 	}
 }
 
-func WithUploadFileRoute(uploadFileRoute *UploadFileRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.uploadFileRoute = uploadFileRoute
+func WithUploadFileRoute(route *UploadFileRoute) Options {
+	return func(r *RegisterRoute) {
+		r.UploadFileRoute = route
 	}
 }
 
-func WithWSRoute(wsRoute *WSRoute) Options {
-	return func(r *RegisterRoutes) {
-		r.wsRoute = wsRoute
+func WithWsRoute(route *WSRoute) Options {
+	return func(r *RegisterRoute) {
+		r.WsRoute = route
 	}
 }
 
-func WithMiddleware(middleware *middleware.Middleware) Options {
-	return func(r *RegisterRoutes) {
-		r.middleware = middleware
-	}
-}
-
-func (r *RegisterRoutes) Register() http.Handler {
+func (r *RegisterRoute) RegisterRoutes() http.Handler {
 	mux := http.NewServeMux()
-	r.healthRoute.Healthcheck(mux)
-	r.authenticationRoute.AuthenticationRoutes(mux)
-	r.userRoute.UserRoutes(mux)
-	r.privateRoute.PrivateRoutes(mux)
-	r.messageRoute.MessageRoutes(mux)
-	r.uploadFileRoute.UploadFileRoutes(mux)
-	r.wsRoute.WSRoutes(mux)
-	return r.middleware.Recover(r.middleware.Logging(r.middleware.CORS(mux.ServeHTTP)))
+
+	mux.Handle("GET /swagger/*any", httpSwagger.Handler(httpSwagger.URL("/docs/swagger.json")))
+
+	// Serve static docs directory (for swagger.json and rapidoc.html)
+	mux.Handle("GET /docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir("./docs"))))
+
+	// Redirect /api-docs to rapidoc
+	mux.Handle("GET /api-docs", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./docs/rapidoc.html")
+	}))
+
+	r.HealthCheckRoute.HealthCheck(mux)
+	r.AuthRoute.AuthRoutes(mux)
+	r.UserRoute.UserRoutes(mux)
+	r.PrivateRoute.PrivateRoutes(mux)
+	r.MessageRoute.MessageRoutes(mux)
+	r.UploadFileRoute.UploadFileRoutes(mux)
+	r.WsRoute.WSRoutes(mux)
+	return r.Middleware.Recover(r.Middleware.Logging(r.Middleware.CORS(mux)))
 }
 
-func NewRegisterRoutes(opts ...Options) *RegisterRoutes {
-	r := &RegisterRoutes{}
+func NewRegisterRoute(opts ...Options) *RegisterRoute {
+	r := &RegisterRoute{}
 	for _, opt := range opts {
 		opt(r)
 	}
+
 	return r
 }

@@ -7,18 +7,17 @@ import (
 )
 
 type UserRoute struct {
-	userHandler *handler.UserHandler
 	middleware  *middleware.Middleware
+	userHandler *handler.UserHandler
 }
 
 func (u *UserRoute) UserRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/users/{id}",
-		u.middleware.Authenticate(u.userHandler.GetUserById))
+	mux.Handle("GET /v1/users/{id}", u.middleware.WrapAuth(u.userHandler.GetUserById))
 }
 
-func NewUserRoute(userHandler *handler.UserHandler, middleware *middleware.Middleware) *UserRoute {
+func NewUserRoute(middleware *middleware.Middleware, userHandler *handler.UserHandler) *UserRoute {
 	return &UserRoute{
-		userHandler: userHandler,
 		middleware:  middleware,
+		userHandler: userHandler,
 	}
 }
