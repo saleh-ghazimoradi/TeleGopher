@@ -3,16 +3,15 @@ package cmd
 import (
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
-	infra "github.com/saleh-ghazimoradi/TeleGopher/infra/TXManager"
 	"github.com/saleh-ghazimoradi/TeleGopher/infra/postgresql"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/handler"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/middleware"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/gateway/route"
-	"github.com/saleh-ghazimoradi/TeleGopher/internal/helper"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/repository"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/server"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/ws"
+	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"log/slog"
 	"os"
 
@@ -26,110 +25,112 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("run called")
 
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+		/*----------Slog Logger----------*/
+		slogLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if len(groups) == 0 && a.Key == slog.TimeKey {
+					t := a.Value.Time()
+					a.Value = slog.StringValue(t.Format("2006-01-02T15:04:05"))
+				}
+				return a
+			},
+		}))
 
-		cfg, err := config.GetConfigInstance()
+		/*----------Strategy Logger----------*/
+		logger := utils.NewLoggerContext(slogLogger)
+
+		/*----------Config----------*/
+		cfg, err := config.GetCfg()
 		if err != nil {
-			logger.Error("error getting config", "err", err.Error())
-			os.Exit(1)
+			logger.Error("failed to get the config", "error", err)
+			return
 		}
 
-		dbConfig := postgresql.NewPostgresql(
+		/*----------Postgresql----------*/
+		postDB := postgresql.NewPostgresql(
 			postgresql.WithHost(cfg.Postgresql.Host),
 			postgresql.WithPort(cfg.Postgresql.Port),
 			postgresql.WithUser(cfg.Postgresql.User),
 			postgresql.WithPassword(cfg.Postgresql.Password),
 			postgresql.WithName(cfg.Postgresql.Name),
-			postgresql.WithTimeZone(cfg.Postgresql.TimeZone),
 			postgresql.WithMaxOpenConn(cfg.Postgresql.MaxOpenConn),
 			postgresql.WithMaxIdleConn(cfg.Postgresql.MaxIdleConn),
 			postgresql.WithMaxIdleTime(cfg.Postgresql.MaxIdleTime),
-			postgresql.WithMaxLifetime(cfg.Postgresql.MaxLifetime),
 			postgresql.WithSSLMode(cfg.Postgresql.SSLMode),
-			postgresql.WithConnectTimeout(cfg.Postgresql.ConnectionTimeout),
+			postgresql.WithTimeout(cfg.Postgresql.Timeout),
+			postgresql.WithLogger(logger),
 		)
 
-		db, err := dbConfig.Connect()
+		gormDB, _, err := postDB.Connect()
 		if err != nil {
-			logger.Error("error connecting", "err", err.Error())
-			os.Exit(1)
+			logger.Error("failed to connect to the database", "error", err)
+			return
 		}
 
-		_ = db
-
-		defer func() {
-			if err := db.Close(); err != nil {
-				logger.Error("error closing db", "err", err.Error())
-				os.Exit(1)
-			}
-		}()
-
 		/*----------Dependencies----------*/
-		txManager := infra.NewTxManager(db)
-		errResponse := helper.NewErrResponse(logger)
-		middlewares := middleware.NewMiddleware(cfg, logger, errResponse)
-		validator := helper.NewValidator()
+		middlewares := middleware.NewMiddleware(logger, cfg)
 
 		/*----------Repositories----------*/
-		userRepository := repository.NewUserRepository(db, db)
-		PrivateRepository := repository.NewPrivateRepository(db, db)
-		messageRepository := repository.NewMessageRepository(db, db)
+		userRepository := repository.NewUserRepository(gormDB, gormDB)
+		privateRepository := repository.NewPrivateRepository(gormDB, gormDB)
+		messageRepository := repository.NewMessageRepository(gormDB, gormDB)
 
 		/*----------Services----------*/
-		authService := service.NewAuthenticationService(cfg, userRepository, txManager)
-		userService := service.NewUserService(userRepository, txManager)
-		privateService := service.NewPrivateService(PrivateRepository, txManager)
-		messageService := service.NewMessageService(messageRepository, PrivateRepository, txManager)
+		authService := service.NewAuthService(userRepository, cfg)
+		userService := service.NewUserService(userRepository)
+		privateService := service.NewPrivateService(privateRepository, userRepository)
+		messageService := service.NewMessageService(messageRepository, privateRepository)
 
-		/*----------WS----------*/
-		hub := ws.NewHub(messageService, privateService)
+		/*----------WS HUB----------*/
+		wsHub := ws.NewHub(privateService, messageService, logger)
 
 		/*----------Handlers----------*/
-		healthcheckHandler := handler.NewHealthCheckHandler(cfg, errResponse)
-		authHandler := handler.NewAuthenticationHandler(errResponse, validator, authService)
+		healthCheck := handler.NewHealthCheckHandler(cfg)
+		authHandler := handler.NewAuthHandler(authService)
 		userHandler := handler.NewUserHandler(userService)
-		privateHandler := handler.NewPrivateHandler(errResponse, privateService)
-		messageHandler := handler.NewMessageHandler(errResponse, validator, messageService)
-		uploadFileHandler := handler.NewUploadFileHandler(errResponse)
-		wsHandler := handler.NewWSHandler(errResponse, cfg, userService, messageService, hub)
+		privateHandler := handler.NewPrivateHandler(privateService)
+		messageHandler := handler.NewMessageHandler(messageService)
+		uploadFileHandler := handler.NewUploadFileHandler()
+		wsHandler := handler.NewWebSocketHandler(userService, messageService, logger, wsHub, cfg)
 
 		/*----------Routes----------*/
-		healthcheckRoute := route.NewHealthCheckRoute(healthcheckHandler)
-		authRoute := route.NewAuthenticationRoute(authHandler, middlewares)
-		userRoute := route.NewUserRoute(userHandler, middlewares)
-		privateRoute := route.NewPrivateRoute(privateHandler, middlewares)
-		messageRoute := route.NewMessageRoute(messageHandler, middlewares)
-		uploadFileRoute := route.NewUploadFileRoute(uploadFileHandler, middlewares)
+		healthRoute := route.NewHealthCheckRoute(healthCheck)
+		authRoute := route.NewAuthRoute(middlewares, authHandler)
+		userRoute := route.NewUserRoute(middlewares, userHandler)
+		privateRoute := route.NewPrivateRoute(middlewares, privateHandler)
+		messageRoute := route.NewMessageRoute(middlewares, messageHandler)
+		uploadFileRoute := route.NewUploadFileRoute(middlewares, uploadFileHandler)
 		wsRoute := route.NewWSRoute(wsHandler)
 
 		/*----------Route Registery----------*/
-		registerRoutes := route.NewRegisterRoutes(
-			route.WithHealthCheckRoute(healthcheckRoute),
-			route.WithAuthenticationRoute(authRoute),
+		register := route.NewRegisterRoute(
+			route.WithMiddleware(middlewares),
+			route.WithHealthCheckRoute(healthRoute),
+			route.WithAuthRoute(authRoute),
 			route.WithUserRoute(userRoute),
 			route.WithPrivateRoute(privateRoute),
 			route.WithMessageRoute(messageRoute),
 			route.WithUploadFileRoute(uploadFileRoute),
-			route.WithWSRoute(wsRoute),
-			route.WithMiddleware(middlewares),
+			route.WithWsRoute(wsRoute),
 		)
 
-		s := server.NewServer(
+		/*----------HTTP Server----------*/
+		httpServer := server.NewServer(
 			server.WithHost(cfg.Server.Host),
 			server.WithPort(cfg.Server.Port),
-			server.WithHandler(registerRoutes.Register()),
-			server.WithReadTimeout(cfg.Server.ReadTimeout),
+			server.WithHandler(register.RegisterRoutes()),
 			server.WithWriteTimeout(cfg.Server.WriteTimeout),
+			server.WithReadTimeout(cfg.Server.ReadTimeout),
 			server.WithIdleTimeout(cfg.Server.IdleTimeout),
-			server.WithErrLog(slog.NewLogLogger(logger.Handler(), slog.LevelError)),
+			server.WithErrLog(slog.NewLogLogger(slogLogger.Handler(), slog.LevelError)),
 			server.WithLogger(logger),
-			server.WithHub(hub),
+			server.WithHub(wsHub),
 		)
 
-		logger.Info("Server is running on:", "port", cfg.Server.Port)
-		if err := s.Connect(); err != nil {
-			logger.Error("error connecting to server", "err", err.Error())
-			os.Exit(1)
+		logger.Info("starting server", "addr", cfg.Server.Host+":"+cfg.Server.Port, "env", cfg.Application.Environment)
+		if err := httpServer.Connect(); err != nil {
+			logger.Error("failed to connect to the http server", "error", err)
+			return
 		}
 	},
 }

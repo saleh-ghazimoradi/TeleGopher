@@ -3,8 +3,9 @@ package cmd
 import (
 	"fmt"
 	"github.com/saleh-ghazimoradi/TeleGopher/config"
-	"github.com/saleh-ghazimoradi/TeleGopher/infra/migration"
 	"github.com/saleh-ghazimoradi/TeleGopher/infra/postgresql"
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/domain"
+	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"log/slog"
 	"os"
 
@@ -18,58 +19,38 @@ var migrateUpCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("migrateUp called")
 
-		logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+		slogLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+		logger := utils.NewLoggerContext(slogLogger)
 
-		cfg, err := config.GetConfigInstance()
+		cfg, err := config.GetCfg()
 		if err != nil {
-			logger.Error("error getting config", "err", err.Error())
-			os.Exit(1)
+			logger.Error("failed to get the config", "error", err)
+			return
 		}
 
-		dbConfig := postgresql.NewPostgresql(
+		postDB := postgresql.NewPostgresql(
 			postgresql.WithHost(cfg.Postgresql.Host),
 			postgresql.WithPort(cfg.Postgresql.Port),
 			postgresql.WithUser(cfg.Postgresql.User),
 			postgresql.WithPassword(cfg.Postgresql.Password),
 			postgresql.WithName(cfg.Postgresql.Name),
-			postgresql.WithTimeZone(cfg.Postgresql.TimeZone),
 			postgresql.WithMaxOpenConn(cfg.Postgresql.MaxOpenConn),
 			postgresql.WithMaxIdleConn(cfg.Postgresql.MaxIdleConn),
 			postgresql.WithMaxIdleTime(cfg.Postgresql.MaxIdleTime),
-			postgresql.WithMaxLifetime(cfg.Postgresql.MaxLifetime),
 			postgresql.WithSSLMode(cfg.Postgresql.SSLMode),
-			postgresql.WithConnectTimeout(cfg.Postgresql.ConnectionTimeout),
+			postgresql.WithTimeout(cfg.Postgresql.Timeout),
+			postgresql.WithLogger(logger),
 		)
 
-		db, err := dbConfig.Connect()
+		gormDB, _, err := postDB.Connect()
 		if err != nil {
-			logger.Error("error connecting to database", "err", err.Error())
-			os.Exit(1)
+			logger.Error("failed to connect to the database", "error", err)
+			return
 		}
 
-		defer func() {
-			if err := db.Close(); err != nil {
-				logger.Error("error closing database connection", "err", err.Error())
-				os.Exit(1)
-			}
-		}()
-
-		migrator, err := migration.NewMigrator(db, dbConfig.Name)
-		if err != nil {
-			logger.Error("migration init failed", "error", err.Error())
-			os.Exit(1)
-		}
-
-		defer func() {
-			if err := migrator.Close(); err != nil {
-				logger.Error("failed to close migration", "error", err.Error())
-				os.Exit(1)
-			}
-		}()
-
-		if err := migrator.Up(); err != nil {
-			logger.Error("migration failed", "error", err.Error())
-			os.Exit(1)
+		if err := gormDB.Migrator().AutoMigrate(&domain.User{}, &domain.Private{}, &domain.Message{}); err != nil {
+			logger.Error("failed to migrate up", "error", err)
+			return
 		}
 	},
 }
