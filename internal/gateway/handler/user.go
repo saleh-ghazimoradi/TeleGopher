@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/saleh-ghazimoradi/TeleGopher/internal/dto"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/helper"
 	"github.com/saleh-ghazimoradi/TeleGopher/internal/service"
 	"net/http"
@@ -33,6 +34,38 @@ func (u *UserHandler) GetUserById(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := u.userService.GetUserById(r.Context(), id)
+	if err != nil {
+		helper.NotFoundResponse(w, "User not found")
+		return
+	}
+
+	helper.SuccessResponse(w, "User successfully retrieved", user)
+}
+
+func (u *UserHandler) GetUserByPhone(w http.ResponseWriter, r *http.Request) {
+	var payload dto.UserByPhoneRequest
+	if err := helper.ReadJSON(w, r, &payload); err != nil {
+		helper.BadRequestResponse(w, "Invalid given payload", err)
+		return
+	}
+
+	user, err := u.userService.GetUserByPhone(r.Context(), payload.Phone)
+	if err != nil {
+		helper.NotFoundResponse(w, "User not found")
+		return
+	}
+
+	helper.SuccessResponse(w, "User successfully retrieved", user)
+}
+
+func (u *UserHandler) GetUsersByName(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		helper.BadRequestResponse(w, "name is required", nil)
+		return
+	}
+
+	user, err := u.userService.GetUsersByName(r.Context(), name)
 	if err != nil {
 		helper.NotFoundResponse(w, "User not found")
 		return

@@ -15,8 +15,8 @@ type AuthService interface {
 	Register(ctx context.Context, input *dto.RegisterRequest) (*dto.RegisterResponse, error)
 	Login(ctx context.Context, input *dto.LoginRequest, platform string) (*dto.LoginResponse, error)
 	Logout(ctx context.Context, userId uint, platform string) error
-	GetUserByRefreshToken(ctx context.Context, input *dto.RefreshTokenRequest, platform string) (*dto.UserResponse, error)
 	RefreshToken(ctx context.Context, input *dto.RefreshTokenRequest, platform string) (*dto.RefreshTokenResponse, error)
+	GetUserById(ctx context.Context, id uint) (*dto.UserResponse, error)
 }
 
 type authService struct {
@@ -25,8 +25,9 @@ type authService struct {
 }
 
 func (a *authService) Register(ctx context.Context, input *dto.RegisterRequest) (*dto.RegisterResponse, error) {
-	if _, err := a.userRepository.GetUserByEmail(ctx, input.Email); err == nil {
-		return nil, repository.ErrEmailExists
+
+	if _, err := a.userRepository.GetUserByPhone(ctx, input.Phone); err == nil {
+		return nil, repository.ErrPhoneNumberExists
 	}
 
 	user, err := a.toUserDomain(input)
@@ -42,7 +43,8 @@ func (a *authService) Register(ctx context.Context, input *dto.RegisterRequest) 
 }
 
 func (a *authService) Login(ctx context.Context, input *dto.LoginRequest, platform string) (*dto.LoginResponse, error) {
-	user, err := a.userRepository.GetUserByEmail(ctx, input.Email)
+
+	user, err := a.userRepository.GetUserByPhone(ctx, input.Phone)
 	if err != nil {
 		switch {
 		case errors.Is(err, repository.ErrRecordNotFound):
@@ -60,16 +62,13 @@ func (a *authService) Login(ctx context.Context, input *dto.LoginRequest, platfo
 	if err != nil {
 		return nil, err
 	}
-
 	refreshToken, err := utils.GenerateRefreshToken()
 	if err != nil {
 		return nil, err
 	}
-
-	if err := a.userRepository.UpdateRefreshToken(ctx, user.Id, refreshToken, platform); err != nil {
+	if err := a.userRepository.UpdateRefreshToken(ctx, user.Id, refreshToken, platform, user.Version); err != nil {
 		return nil, err
 	}
-
 	return a.toLoginResponse(user, accessToken, refreshToken), nil
 }
 
@@ -78,34 +77,37 @@ func (a *authService) Logout(ctx context.Context, userId uint, platform string) 
 }
 
 func (a *authService) RefreshToken(ctx context.Context, input *dto.RefreshTokenRequest, platform string) (*dto.RefreshTokenResponse, error) {
-	user, err := a.userRepository.GetUserByRefreshToken(ctx, input.RefreshToken, platform)
+	user, err := a.userRepository.GetValidUserByRefreshToken(ctx, input.RefreshToken, platform, a.cfg.JWT.RefreshTokenExpires)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("invalid or expired refresh token")
 	}
 
 	accessToken, err := utils.GenerateToken(a.cfg, user.Id, user.Name, platform)
 	if err != nil {
 		return nil, err
 	}
-
-	refreshToken, err := utils.GenerateRefreshToken()
+	newRefreshToken, err := utils.GenerateRefreshToken()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := a.userRepository.UpdateRefreshToken(ctx, user.Id, refreshToken, platform); err != nil {
+	// Use the version from the fetched user to prevent concurrent overwrites
+	if err := a.userRepository.UpdateRefreshToken(ctx, user.Id, newRefreshToken, platform, user.Version); err != nil {
+		if errors.Is(err, repository.ErrRefreshTokenReused) {
+			// Optional: delete all tokens to force re-login if replay detected
+			// a.userRepository.DeleteRefreshToken(ctx, user.Id, platform)
+			return nil, errors.New("refresh token already used – possible replay attack")
+		}
 		return nil, err
 	}
-
-	return a.toRefreshToken(accessToken, refreshToken), nil
+	return a.toRefreshToken(accessToken, newRefreshToken), nil
 }
 
-func (a *authService) GetUserByRefreshToken(ctx context.Context, input *dto.RefreshTokenRequest, platform string) (*dto.UserResponse, error) {
-	user, err := a.userRepository.GetUserByRefreshToken(ctx, input.RefreshToken, platform)
+func (a *authService) GetUserById(ctx context.Context, id uint) (*dto.UserResponse, error) {
+	user, err := a.userRepository.GetUserById(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
 	return a.toUserResponse(user), nil
 }
 
@@ -116,7 +118,7 @@ func (a *authService) toUserDomain(input *dto.RegisterRequest) (*domain.User, er
 	}
 	return &domain.User{
 		Name:     input.Name,
-		Email:    input.Email,
+		Phone:    input.Phone,
 		Password: hashedPassword,
 	}, nil
 }
@@ -125,7 +127,7 @@ func (a *authService) toRegisterResponse(user *domain.User) *dto.RegisterRespons
 	return &dto.RegisterResponse{
 		Id:        user.Id,
 		Name:      user.Name,
-		Email:     user.Email,
+		Phone:     user.Phone,
 		CreatedAt: user.CreatedAt,
 	}
 }
@@ -149,7 +151,7 @@ func (a *authService) toUserResponse(user *domain.User) *dto.UserResponse {
 	return &dto.UserResponse{
 		Id:        user.Id,
 		Name:      user.Name,
-		Email:     user.Email,
+		Phone:     user.Phone,
 		CreatedAt: user.CreatedAt,
 	}
 }

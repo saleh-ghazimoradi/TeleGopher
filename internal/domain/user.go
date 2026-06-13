@@ -7,7 +7,7 @@ import (
 type User struct {
 	Id                   uint   `gorm:"primaryKey"`
 	Name                 string `gorm:"not null"`
-	Email                string `gorm:"uniqueIndex;not null"`
+	Phone                string `gorm:"uniqueIndex;not null"`
 	Password             string `gorm:"not null"`
 	RefreshTokenWeb      *string
 	RefreshTokenWebAt    *time.Time
@@ -22,6 +22,6 @@ func (u *User) ToMap() map[string]any {
 	return map[string]any{
 		"id":    u.Id,
 		"name":  u.Name,
-		"email": u.Email,
+		"phone": u.Phone,
 	}
 }

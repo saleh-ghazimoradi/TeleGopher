@@ -76,6 +76,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 
 		if claims.Platform != platform {
 			helper.UnauthorizedResponse(w, "Unauthorized")
+			return
 		}
 
 		ctx := r.Context()

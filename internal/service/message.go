@@ -240,6 +240,7 @@ func (m *messageService) toMessageDTO(message *domain.Message) *dto.MessageRespo
 	return &dto.MessageResponse{
 		Id:          message.Id,
 		FromId:      message.FromId,
+		PrivateId:   *message.PrivateId,
 		MessageType: string(message.MessageType),
 		Content:     message.Content,
 		Delivered:   message.Delivered,

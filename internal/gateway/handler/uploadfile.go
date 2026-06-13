@@ -6,7 +6,6 @@ import (
 	"github.com/saleh-ghazimoradi/TeleGopher/utils"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 )
@@ -92,7 +91,9 @@ func (u *UploadFileHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileUrl := fmt.Sprintf("/v1/files/chats/%d/%d/%s", id, userId, url.PathEscape(header.Filename))
+	fmt.Printf("file name: %v\n", header.Filename)
+
+	fileUrl := fmt.Sprintf("/v1/files/chats/%d/%d/%s", id, userId, header.Filename)
 
 	helper.SuccessResponse(w, "File successfully uploaded", fileUrl)
 }

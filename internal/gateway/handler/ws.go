@@ -65,7 +65,7 @@ func (wsh *WebSocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Requ
 	client := ws.NewClient(&domain.User{
 		Id:    user.Id,
 		Name:  user.Name,
-		Email: user.Email,
+		Phone: user.Phone,
 	}, conn)
 
 	wsh.hub.RegisterClient(client)

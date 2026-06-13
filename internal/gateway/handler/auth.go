@@ -15,7 +15,7 @@ type AuthHandler struct {
 
 // Signup godoc
 // @Summary      Signup a new user
-// @Description  Create a new user account with email and password
+// @Description  Create a new user account with phone and password
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
@@ -49,7 +49,7 @@ func (a *AuthHandler) Signup(w http.ResponseWriter, r *http.Request) {
 
 // Login godoc
 // @Summary      User login
-// @Description  Authenticate user with email and password
+// @Description  Authenticate user with phone and password
 // @Tags         Authentication
 // @Accept       json
 // @Produce      json
@@ -186,26 +186,19 @@ func (a *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payload dto.RefreshTokenRequest
-	if err := helper.ReadJSON(w, r, &payload); err != nil {
-		helper.BadRequestResponse(w, "Invalid given payload", err)
+	userId, ok := utils.UserIdFromContext(r.Context())
+	if !ok {
+		helper.UnauthorizedResponse(w, "Unauthorized")
 		return
 	}
 
-	v := helper.NewValidator()
-	dto.ValidateRefreshToken(v, &payload)
-	if !v.Valid() {
-		helper.FailedValidationResponse(w, "input's not valid")
-		return
-	}
-
-	user, err := a.authService.GetUserByRefreshToken(r.Context(), &payload, platform)
+	user, err := a.authService.GetUserById(r.Context(), userId)
 	if err != nil {
 		helper.InternalServerError(w, "failed to fetch user", err)
 		return
 	}
 
-	helper.SuccessResponse(w, "User Successfully fetched", user)
+	helper.SuccessResponse(w, "User successfully fetched", user)
 }
 
 func NewAuthHandler(authService service.AuthService) *AuthHandler {

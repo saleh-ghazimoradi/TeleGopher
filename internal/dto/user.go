@@ -6,19 +6,19 @@ import (
 
 type RegisterRequest struct {
 	Name     string `json:"name"`
-	Email    string `json:"email"`
+	Phone    string `json:"phone"`
 	Password string `json:"password"`
 }
 
 type RegisterResponse struct {
 	Id        uint      `json:"id"`
 	Name      string    `json:"name"`
-	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
+	Phone    string `json:"phone"`
 	Password string `json:"password"`
 }
 
@@ -40,6 +40,10 @@ type RefreshTokenResponse struct {
 type UserResponse struct {
 	Id        uint      `json:"id"`
 	Name      string    `json:"name"`
-	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type UserByPhoneRequest struct {
+	Phone string `json:"phone"`
 }
